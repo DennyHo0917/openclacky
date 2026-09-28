@@ -81,11 +81,15 @@
       <div class="search-panel-card">
         <!-- Input row -->
         <div class="search-input-row">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16" y2="16"/></svg>
+          </span>
           <input id="session-search-q" type="text" class="search-input"
                  data-i18n-placeholder="sessions.search.placeholder" placeholder="Search sessions…"
                  autocomplete="off" />
-          <button id="btn-search-q-clear" class="btn-search-q-clear" aria-label="Clear text" hidden>✕</button>
+          <button id="btn-search-q-clear" class="btn-search-q-clear" aria-label="Clear text" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </button>
           <button id="btn-session-search-close" class="cmd-palette-esc" type="button" aria-label="Close">ESC</button>
         </div>
         <!-- Filter row -->
@@ -108,8 +112,11 @@
           </div>
           <div class="search-date-wrap">
             <button id="session-search-date" class="search-date datepicker-trigger" type="button" data-value="" data-i18n="sessions.search.datePlaceholder"></button>
+            <svg class="search-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
           </div>
-          <button id="btn-search-clear-all" class="btn-search-clear-all" aria-label="Clear filters" hidden>✕</button>
+          <button id="btn-search-clear-all" class="btn-search-clear-all" aria-label="Clear filters" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </button>
         </div>
       </div>
       <!-- Results render here (independent from the sidebar session list) -->
@@ -490,7 +497,7 @@
         </span>
         <span class="sib-sep sib-sep-after-model">│</span>
         <span id="sib-reasoning-wrap">
-          <span id="sib-reasoning" class="sib-reasoning-clickable" data-i18n-title="sib.reasoning.tooltip" title="Click to change reasoning effort"><span id="sib-reasoning-text"></span><span class="sib-caret" aria-hidden="true"><svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true"><path d="M4 6.5L8 10.5L12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+          <span id="sib-reasoning" class="sib-reasoning-clickable" data-i18n-title="sib.reasoning.tooltip" title="Click to change reasoning effort"><span class="sib-pill-label" data-i18n="sib.reasoning.label">Reasoning</span><span id="sib-reasoning-text"></span><span class="sib-caret" aria-hidden="true"><svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true"><path d="M4 6.5L8 10.5L12 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
           <div id="sib-reasoning-dropdown" class="clacky-popover sib-reasoning-dropdown" style="display:none" role="menu"></div>
         </span>
         <span class="sib-sep sib-sep-after-reasoning">│</span>
