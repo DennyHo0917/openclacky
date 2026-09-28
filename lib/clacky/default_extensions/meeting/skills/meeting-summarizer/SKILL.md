@@ -1,5 +1,7 @@
 ---
 name: meeting-summarizer
+name_zh: 会议纪要
+description_zh: 根据会议转写内容生成结构化纪要，包含关键决策、待办事项和讨论要点，会议结束后自动触发。
 description: Summarize a completed meeting from its transcript. Produces a structured summary with key decisions, action items, and discussion highlights. Triggered automatically when a meeting ends.
 user-invocable: false
 auto_summarize: false

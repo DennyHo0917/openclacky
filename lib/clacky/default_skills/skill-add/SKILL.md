@@ -1,5 +1,7 @@
 ---
 name: skill-add
+name_zh: 安装技能
+description_zh: 通过 zip 链接或本地 zip 文件安装技能。
 description: 'Install skills from a zip URL or local zip file path. Use this skill whenever the user wants to install a skill from a zip link or a local file, or uses commands like /skill-add with a URL or file path. Trigger on phrases like: install skill, install from zip, skill from zip, skill from url, add skill from zip, 安装skill, 从zip安装skill, 从本地安装skill.'
 disable-model-invocation: false
 user-invocable: true

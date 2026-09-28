@@ -1,5 +1,7 @@
 ---
 name: product-help
+name_zh: 产品帮助
+description_zh: 解答关于产品本身的问题：安装、技能、配置、记忆、会话、品牌定制、故障排查等。
 description: 'Use this skill when the user asks about my own features, configuration, or usage — installation, skills, Web UI, CLI, API config, memory, sessions, encryption, white-label, publishing, pricing, troubleshooting, or restarting the server. Do NOT trigger for general coding tasks unrelated to me.'
 fork_agent: true
 user-invocable: false

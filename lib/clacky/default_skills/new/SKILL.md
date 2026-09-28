@@ -1,5 +1,7 @@
 ---
 name: new
+name_zh: 新建项目
+description_zh: 快速创建一个新项目，马上开始开发。
 description: Create a new project to start development quickly
 agent: coding
 disable-model-invocation: false

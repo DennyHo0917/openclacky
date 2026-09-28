@@ -1,5 +1,7 @@
 ---
 name: persist-memory
+name_zh: 记住信息
+description_zh: 把需要记住的内容写入长期记忆，自动归类合并。
 description: Persist information to long-term memory at ~/.clacky/memories/. Use when the user asks you to remember/note something, or when reviewing a finished conversation for facts worth keeping. Handles file naming, topic merging, frontmatter, and size limits.
 fork_agent: true
 user-invocable: false

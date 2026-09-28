@@ -1,6 +1,8 @@
 ---
 name: deploy
-description: Deploy Rails applications to Railway. Handles first-time setup and re-deploys idempotently using Railway CLI. Trigger on: "deploy", "deploy to railway", "railway deploy", "发布", "部署", "上线".
+name_zh: 一键部署
+description_zh: 把 Rails 应用部署到 Railway，首次配置和后续更新都能自动完成。
+description: 'Deploy Rails applications to Railway. Handles first-time setup and re-deploys idempotently using Railway CLI. Trigger on: "deploy", "deploy to railway", "railway deploy", "发布", "部署", "上线".'
 agent: coding
 disable-model-invocation: false
 ---

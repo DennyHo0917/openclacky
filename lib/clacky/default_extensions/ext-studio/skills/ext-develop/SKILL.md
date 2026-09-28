@@ -3,6 +3,8 @@
 # After context compression, previously inspected host files may be
 # mistaken for extension edit targets.
 name: ext-develop
+name_zh: 扩展开发
+description_zh: 开发、调试和发布扩展：从想法搭出新扩展，修复加载失败或不显示的问题，或发布到扩展市场。
 description: Build, debug, or publish an OpenClacky extension — scaffold a new one from an idea, fix a broken/invisible panel/api/skill/agent, or ship it to the marketplace. Trigger on create/start extension, plugin, panel, ext verify error, "won't load", "not showing up", publish/ship/unpublish an extension.
 agent: ext-developer
 ---

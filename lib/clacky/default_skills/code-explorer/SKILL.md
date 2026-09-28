@@ -1,5 +1,7 @@
 ---
 name: code-explorer
+name_zh: 代码探索
+description_zh: 分析项目结构，梳理代码逻辑，回答「这个功能是怎么实现的」。
 description: Use this skill when exploring, analyzing, or understanding project/code structure. Required for tasks like "analyze project", "explore codebase", "understand how X works".
 agent: coding
 fork_agent: true

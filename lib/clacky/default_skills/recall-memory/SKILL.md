@@ -1,5 +1,7 @@
 ---
 name: recall-memory
+name_zh: 回忆记忆
+description_zh: 按主题从长期记忆中找出相关内容并整理成摘要。
 description: Recall relevant long-term memories on demand. Given a topic or question, judges relevance from pre-loaded metadata, loads only relevant files, and returns a concise summary to the main agent.
 fork_agent: true
 user-invocable: false

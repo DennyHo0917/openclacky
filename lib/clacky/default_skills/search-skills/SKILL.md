@@ -1,5 +1,7 @@
 ---
 name: search-skills
+name_zh: 搜索技能
+description_zh: 按关键词在所有已安装的技能中查找合适的技能。
 description: 'Search ALL installed skills (including ones not shown in AVAILABLE SKILLS) by keyword. Use this whenever you suspect a fitting skill might exist but is not listed in your system prompt — for example before building a new skill, when the user mentions a domain not covered by visible skills, or after seeing the (N more skills installed) hint. Triggers on phrases like search skills, find a skill for, is there a skill that, 查找skill, 有没有skill做.'
 disable-model-invocation: false
 user-invocable: true

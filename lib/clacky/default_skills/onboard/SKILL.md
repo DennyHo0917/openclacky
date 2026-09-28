@@ -1,5 +1,7 @@
 ---
 name: onboard
+name_zh: 初始设置
+description_zh: 首次使用引导：设置助手名字、性格和你的个人档案，也可单独调整其中一项。
 description: Onboard a new user OR curate a single piece of the assistant's inner state. Without arguments, runs the full first-run ceremony (AI name, personality, user profile, SOUL.md + USER.md, optional browser + personal website). With `scope:soul` or `scope:user`, runs a quick chat to update just that one profile file. With `path:<abs>`, runs a quick chat to update / keep / delete one memory file under ~/.clacky/memories/.
 disable-model-invocation: true
 user-invocable: true

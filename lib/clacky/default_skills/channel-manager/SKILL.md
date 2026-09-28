@@ -1,5 +1,7 @@
 ---
 name: channel-manager
+name_zh: 渠道管理
+description_zh: 接入飞书、企业微信、微信、钉钉、Discord、Telegram 等 IM 渠道，支持配置、启停、诊断和发消息。
 description: |
   Configure IM platform channels (Feishu, WeCom, Weixin, Discord, Telegram, DingTalk) for openclacky.
   Uses browser automation for navigation; guides the user to paste credentials and perform UI steps.

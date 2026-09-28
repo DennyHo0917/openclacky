@@ -1,5 +1,7 @@
 ---
 name: mcp-manager
+name_zh: MCP 管理
+description_zh: 添加、查看、检测、删除和重新配置 MCP 服务，无需手动编辑 JSON。
 description: |
   Manage MCP (Model Context Protocol) servers for openclacky: add, list, probe, remove,
   reconfigure. Edits ~/.clacky/mcp.json so the user never writes JSON by hand.

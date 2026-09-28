@@ -1,5 +1,7 @@
 ---
 name: cron-task-creator
+name_zh: 定时任务
+description_zh: 创建和管理定时自动任务，支持按天、周、小时执行，可随时编辑、启停或删除。
 description: 'Create, manage, and run scheduled automated tasks (cron jobs) in Clacky. Use this skill whenever the user wants to create a new automated task or cron job, set up recurring automation, schedule something to run daily/weekly/hourly, view all scheduled tasks, edit an existing task prompt or cron schedule, enable or disable a task, delete a task, check task run history or logs, or run a task immediately via the WebUI. Trigger on phrases like cron, scheduled task, run every day, automate this; 定时任务, 每天自动, 定时执行.'
 disable-model-invocation: false
 user-invocable: true

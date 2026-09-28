@@ -1,5 +1,7 @@
 ---
 name: computer-use
+name_zh: 电脑操控
+description_zh: 操控桌面上的原生应用、弹窗、菜单栏和文件选择器，处理终端和浏览器够不着的操作，支持 macOS 和 WSL 下的 Windows。
 description: Drive the desktop — macOS, or the Windows desktop through WSL — when a task needs a native app, dialog, menu bar, file picker or anything the terminal and browser tools cannot reach. Screenshot first, then click and type by coordinates read from that image.
 ---
 

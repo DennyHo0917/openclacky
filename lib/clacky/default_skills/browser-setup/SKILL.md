@@ -1,5 +1,7 @@
 ---
 name: browser-setup
+name_zh: 浏览器配置
+description_zh: 配置 Chrome 或 Edge 浏览器工具并检测连接，支持 macOS、Linux 和 WSL。
 description: |
   Configure the browser tool for Clacky. Guides the user through Chrome or Edge setup,
   verifies the connection, and writes ~/.clacky/browser.yml.

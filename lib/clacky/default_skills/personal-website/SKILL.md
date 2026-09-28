@@ -1,5 +1,7 @@
 ---
 name: personal-website
+name_zh: 个人主页
+description_zh: 根据你的资料生成一张精美的个人主页并发布上线，得到可分享的链接。
 description: |
   Generate a beautiful personal homepage (linktree-style) and publish it online for the user.
   Reads user info from ~/.clacky/agents/USER.md and AI info from ~/.clacky/agents/SOUL.md.
