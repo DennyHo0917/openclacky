@@ -5,10 +5,10 @@ module Clacky
     ZH = {
       "phase.skill_evolution"           => "正在复盘本次任务",
       "phase.memory_update"             => "正在更新长期记忆",
-      "llm.error.insufficient_credit"   => "账户余额不足，请前往控制台充值后继续使用",
+      "llm.error.insufficient_credit"   => "API Key 账户余额不足，请前往控制台充值后继续使用",
       "llm.error.rate_limit_400"        => "请求频率过高或服务暂时不可用，正在重试...",
       "llm.error.invalid_api_key"       => "API Key 无效或已过期，请到设置中重新配置",
-      "llm.error.403.model_not_allowed" => "当前模型不支持免费试用，请升级套餐或切换其他模型",
+      "llm.error.403.model_not_allowed" => "免费试用仅支持 or-gemini-3-8-flash 模型，请切换到该模型，或充值后使用其他模型",
       "llm.error.403.api_key_revoked"   => "API 密钥已被撤销，请前往控制台重新生成",
       "llm.error.403.api_key_expired"   => "API 密钥已过期，请前往控制台重新生成",
       "llm.error.403.quota_exceeded"    => "API Key 配额已超限，请在管理后台调整配额或关闭限制",

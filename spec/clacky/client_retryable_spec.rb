@@ -94,6 +94,22 @@ RSpec.describe Clacky::Client do
       expect { client.send(:raise_error, resp) }
         .to raise_error(Clacky::BadRequestError, /Bad Request/)
     end
+
+    it "raises ModelNotAllowedError with top-up context on 403 model_not_allowed" do
+      resp = fake_response(status: 403, body: '{"error":{"code":"model_not_allowed","message":"not available for free trial keys"}}')
+      expect { client.send(:raise_error, resp) }.to raise_error(Clacky::ModelNotAllowedError) { |e|
+        expect(e.message).to include("or-gemini-3-8-flash")
+        expect(e.message).not_to include("[LLM]")
+        expect(e.error_code).to eq("model_not_allowed")
+      }
+    end
+
+    it "raises plain AgentError on other 403 codes" do
+      resp = fake_response(status: 403, body: '{"error":{"code":"api_key_revoked","message":"api key revoked"}}')
+      expect { client.send(:raise_error, resp) }.to raise_error(Clacky::AgentError) { |e|
+        expect(e).not_to be_a(Clacky::InsufficientCreditError)
+      }
+    end
   end
 
   # ── send_messages_with_tools retry integration ────────────────────────────

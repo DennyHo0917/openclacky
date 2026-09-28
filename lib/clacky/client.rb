@@ -817,7 +817,7 @@ module Clacky
 
       if error_code == "insufficient_credit" || response.status == 402
         raise InsufficientCreditError.new(
-          "[LLM] #{I18n.t("llm.error.insufficient_credit")}",
+          "#{I18n.t("llm.error.insufficient_credit")}",
           error_code: "insufficient_credit",
           provider_id: @provider_id,
           raw_message: error_message
@@ -827,30 +827,37 @@ module Clacky
       case response.status
       when 400
         if error_message.match?(/ThrottlingException|unavailable|quota/i)
-          raise RetryableError.new("[LLM] #{I18n.t("llm.error.rate_limit_400")}", routed_tier: routed_tier)
+          raise RetryableError.new("#{I18n.t("llm.error.rate_limit_400")}", routed_tier: routed_tier)
         end
 
         raise BadRequestError.new(
           "[LLM] Client request error: #{error_message}",
-          display_message: "[LLM] #{I18n.t("llm.error.bad_request")}",
+          display_message: "#{I18n.t("llm.error.bad_request")}",
           raw_message: error_message
         )
       when 401
-        raise AgentError.new("[LLM] #{I18n.t("llm.error.invalid_api_key")}", raw_message: error_message)
+        raise AgentError.new("#{I18n.t("llm.error.invalid_api_key")}", raw_message: error_message)
       when 403
         i18n_key = "llm.error.403.#{error_code}"
         translated = I18n.t(i18n_key)
         translated = I18n.t("llm.error.403.default") if translated == i18n_key
-        raise AgentError.new("[LLM] #{translated}", raw_message: error_message)
+        raise AgentError.new(translated, raw_message: error_message) unless error_code == "model_not_allowed"
+
+        raise ModelNotAllowedError.new(
+          translated,
+          error_code: error_code,
+          provider_id: @provider_id,
+          raw_message: error_message
+        )
       when 404
-        raise AgentError.new("[LLM] #{I18n.t("llm.error.endpoint_not_found")}", raw_message: error_message)
+        raise AgentError.new("#{I18n.t("llm.error.endpoint_not_found")}", raw_message: error_message)
       when 429
         if error_code == "quota_exceeded"
-          raise AgentError.new("[LLM] #{I18n.t("llm.error.quota_exhausted")}", raw_message: error_message)
+          raise AgentError.new("#{I18n.t("llm.error.quota_exhausted")}", raw_message: error_message)
         end
-        raise RetryableError.new("[LLM] #{I18n.t("llm.error.rate_limit_429")}", routed_tier: routed_tier)
-      when 500..599 then raise RetryableError.new("[LLM] #{I18n.t("llm.error.server_error", status: response.status)}", routed_tier: routed_tier)
-      else raise AgentError.new("[LLM] #{I18n.t("llm.error.unexpected", status: response.status)}", raw_message: error_message)
+        raise RetryableError.new("#{I18n.t("llm.error.rate_limit_429")}", routed_tier: routed_tier)
+      when 500..599 then raise RetryableError.new("#{I18n.t("llm.error.server_error", status: response.status)}", routed_tier: routed_tier)
+      else raise AgentError.new("#{I18n.t("llm.error.unexpected", status: response.status)}", raw_message: error_message)
       end
     end
 
@@ -858,7 +865,7 @@ module Clacky
     def check_html_response(response)
       body = response.body.to_s.lstrip
       if body.start_with?("<!DOCTYPE", "<!doctype", "<html", "<HTML")
-        raise RetryableError, "[LLM] #{I18n.t("llm.error.html_response")}"
+        raise RetryableError, "#{I18n.t("llm.error.html_response")}"
       end
     end
 

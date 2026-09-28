@@ -4457,26 +4457,50 @@ body {
   flex-direction: column;
   gap: 0.5rem;
 }
-.msg-error .retry-btn {
-  align-self: flex-start;
-  padding: 0.5rem 1rem;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+.msg-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.msg-error .retry-btn,
+.msg-error .error-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  height: 1.875rem;
+  padding: 0 0.75rem;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  transition: all 0.2s;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.msg-error .retry-btn {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-primary);
 }
 .msg-error .retry-btn:hover:not(:disabled) {
   background: var(--color-bg-secondary);
-  border-color: var(--color-accent-primary);
-  color: var(--color-accent-primary);
+  border-color: var(--color-text-secondary);
 }
 .msg-error .retry-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.msg-error .error-action-btn,
+.msg-error a.error-action-btn {
+  background: var(--color-button-primary);
+  color: var(--color-button-primary-text);
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+.msg-error a.error-action-btn:hover {
+  background: var(--color-button-primary-hover);
+  opacity: 1;
 }
 .msg-error a {
   color: var(--color-error);

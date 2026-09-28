@@ -202,6 +202,8 @@ module Clacky
       @provider_id = provider_id
     end
   end
+  # Free-trial key used a model outside its allow-list; carries the same top-up context.
+  class ModelNotAllowedError < InsufficientCreditError; end
   # Transient errors that should be retried (5xx, HTML response, rate limit).
   # routed_tier: which auto-routing tier ("floor"/"upgrade") the failed call
   # was routed to, echoed from the gateway's X-Clacky-Routed-Tier header. nil

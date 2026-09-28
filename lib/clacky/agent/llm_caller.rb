@@ -225,7 +225,7 @@ module Clacky
               end
             end
 
-            raise AgentError.new("[LLM] #{I18n.t("llm.error.request_timeout", retries: max_retries)}", raw_message: e.message)
+            raise AgentError.new("#{I18n.t("llm.error.request_timeout", retries: max_retries)}", raw_message: e.message)
           end
 
         rescue Faraday::ConnectionFailed, Faraday::SSLError, Errno::ECONNREFUSED, Errno::ETIMEDOUT, Errno::EPIPE => e
@@ -276,7 +276,7 @@ module Clacky
 
             # Don't show_error here — let the outer rescue block handle it to avoid duplicates.
             # Progress cleanup is the caller's responsibility (via its own ensure block).
-            raise AgentError.new("[LLM] #{I18n.t("llm.error.network_failed", retries: max_retries)}", raw_message: e.message)
+            raise AgentError.new("#{I18n.t("llm.error.network_failed", retries: max_retries)}", raw_message: e.message)
           end
 
         rescue RetryableError => e
@@ -339,7 +339,7 @@ module Clacky
 
           # Don't show_error here — let the outer rescue block handle it to avoid duplicates.
           # Progress cleanup is the caller's responsibility (via its own ensure block).
-          raise AgentError.new("[LLM] #{I18n.t("llm.error.service_unavailable", retries: current_max)}", raw_message: e.message)
+          raise AgentError.new("#{I18n.t("llm.error.service_unavailable", retries: current_max)}", raw_message: e.message)
         end
 
         rescue Clacky::BadRequestError => e
