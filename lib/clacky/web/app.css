@@ -2769,6 +2769,21 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1px;
+/* Chip text is 12px, so the dropdown's 18px tile would loom over it. */
+.ns-ctx-chip .sib-vendor-badge {
+  width: 0.9375rem;
+  height: 0.9375rem;
+  border-radius: 4px;
+  font-size: 0.4375rem;
+}
+.ns-ctx-chip .sib-vendor-badge svg {
+  width: 0.5625rem;
+  height: 0.5625rem;
+}
+.ns-ctx-chip .sib-vendor-badge.is-brand svg {
+  width: 0.6875rem;
+  height: 0.6875rem;
+}
 }
 .ns-ctx-popover-item {
   display: block;
