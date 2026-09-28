@@ -7,6 +7,7 @@ RSpec.describe "Extensions row action menu UI" do
   let(:styles) { File.read(File.join(web_dir, "app.css")) }
   let(:i18n)   { File.read(File.join(web_dir, "i18n.js")) }
   let(:html)   { File.read(File.join(web_dir, "index.html")) }
+  let(:utils)  { File.read(File.join(web_dir, "utils.js")) }
 
   it "replaces the per-row enable switch with a shared … menu" do
     expect(view).to include('data-ext-more="${escapeHtml(id)}"')
@@ -95,5 +96,13 @@ RSpec.describe "Extensions row action menu UI" do
   it "ships manage/more labels in both locales" do
     expect(i18n.scan('"extensions.action.manage"').size).to eq(2)
     expect(i18n.scan('"extensions.action.more"').size).to eq(2)
+  end
+
+  it "draws the default letter icon from the localized display name" do
+    expect(view).to include("function _displayName(ext) {")
+    expect(view).to include('if (I18n.lang() === "zh" && ext.display_name_zh) return ext.display_name_zh;')
+    expect(view).to include("return letterIcon(_displayName(ext), ext.name || ext.display_name);")
+    expect(view).not_to include("function _defaultIcon")
+    expect(utils).to include("function letterIcon(label, seed) {")
   end
 end
