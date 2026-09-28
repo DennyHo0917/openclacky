@@ -971,17 +971,7 @@ module Clacky
       # Prepend sender identity and optional group chat history to the user's message.
       # Returns the original text unchanged when there is no extra context.
       private def build_prompt_with_context(event, text)
-        user_id = event[:user_id].to_s
-        sender  = user_id
-
-        history = event[:group_history]
-        if history.nil? || history.empty?
-          return "[Sender: #{sender}]\n#{text}"
-        end
-
-        lines  = history.map { |e| "#{e[:user_id]}: #{e[:text]}" }.join("\n")
-        header = "[Group chat history (#{history.size} messages)]"
-        [header, lines, "---", "[Sender: #{sender}]", text].join("\n")
+        Clacky::Utils::ChannelPrompt.build(text, sender: event[:user_id].to_s, history: event[:group_history])
       end
     end
   end
