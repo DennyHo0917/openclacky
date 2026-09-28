@@ -339,9 +339,7 @@ module Clacky
       # channel_info so a normal user literally typing these lines keeps them.
       private def strip_channel_prompt_prefix(text)
         return text unless @channel_info
-        text.to_s
-            .sub(/\A\[Group chat history \(\d+ messages\)\]\n.*?\n---\n\[Sender: [^\]]*\]\n?/m, "")
-            .sub(/\A\[Sender: [^\]]*\]\n?/, "")
+        Clacky::Utils::ChannelPrompt.strip(text)
       end
 
       private def replay_rounds(ui, page)
