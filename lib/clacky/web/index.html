@@ -1541,10 +1541,13 @@
       <p class="setup-phase-label" data-i18n="onboard.lang.prompt">Choose your language</p>
       <div id="setup-lang-row">
         <div id="setup-lang-btns">
-          <button id="setup-btn-lang-en" class="setup-lang-btn">English</button>
           <button id="setup-btn-lang-zh" class="setup-lang-btn active">中文</button>
+          <button id="setup-btn-lang-en" class="setup-lang-btn">English</button>
         </div>
-        <button id="setup-btn-lang-next" class="setup-next-btn" data-i18n="onboard.lang.next">Continue →</button>
+        <button id="setup-btn-lang-next" class="setup-next-btn">
+          <span id="setup-btn-lang-next-label">继续</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+        </button>
       </div>
     </div>
 
@@ -1565,7 +1568,8 @@
             <li data-i18n="onboard.device.card.point2">Same pricing as official APIs, switch models instantly</li>
           </ul>
           <button id="setup-btn-device-login" class="setup-submit-btn setup-device-btn">
-            <span data-i18n="onboard.device.btn">Get started free →</span>
+            <span data-i18n="onboard.device.btn">Get started free</span>
+            <svg class="setup-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
           </button>
         </div>
 
@@ -1577,14 +1581,14 @@
             <span data-i18n="onboard.device.code">Verification code:</span>
             <strong id="setup-device-usercode">—</strong>
           </p>
-          <a id="setup-device-link" href="#" target="_blank" rel="noopener" class="setup-device-reopen" data-i18n="onboard.device.reopen">Open browser again →</a>
+          <a id="setup-device-link" href="#" target="_blank" rel="noopener" class="setup-device-reopen"><span data-i18n="onboard.device.reopen">Open browser again</span><svg class="setup-btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>
           <button id="setup-device-cancel" class="setup-back-btn" data-i18n="onboard.device.cancel">Cancel</button>
         </div>
 
         <!-- Success state: shown after approval, before launching onboard session -->
         <div id="setup-device-success" style="display:none" class="setup-device-success">
           <div class="setup-device-success-head">
-            <span class="setup-device-success-icon">✓</span>
+            <span class="setup-device-success-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
             <span class="setup-device-success-title" data-i18n="onboard.device.success.title">You're in!</span>
           </div>
           <p class="setup-device-success-lead" data-i18n="onboard.device.success.lead">Your account is connected. Here's what you got:</p>
@@ -1599,14 +1603,17 @@
             </li>
             <li class="setup-device-success-note" data-i18n="onboard.device.success.note">During the trial only Gemini 3.8 Flash is available — top up any amount to unlock all frontier models on this same key.</li>
           </ul>
-          <button id="setup-btn-device-continue" class="setup-submit-btn" data-i18n="onboard.device.success.btn">Start using Clacky →</button>
+          <button id="setup-btn-device-continue" class="setup-submit-btn"><span data-i18n="onboard.device.success.btn">Start using Clacky</span><svg class="setup-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
         </div>
 
         <div id="setup-device-error" class="setup-test-result" style="min-height:0;"></div>
       </div>
 
       <!-- Secondary path: manual key entry, collapsed by default -->
-      <button id="setup-manual-toggle" class="setup-manual-toggle-btn" data-i18n="onboard.manual.toggle">Configure manually with your own API key</button>
+      <button id="setup-manual-toggle" class="setup-manual-toggle-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L20 3"/><path d="M16 7l3 3"/><path d="M18.5 4.5l2 2"/></svg>
+        <span data-i18n="onboard.manual.toggle">Configure manually with your own API key</span>
+      </button>
 
       <div id="setup-manual-section" style="display:none">
       <div class="setup-field">
@@ -1649,7 +1656,7 @@
       <div class="setup-field">
         <label class="setup-label">
           <span data-i18n="onboard.key.apikey">API Key</span>
-          <a id="setup-get-apikey-link" href="#" target="_blank" rel="noopener" style="display:none;margin-left:0.5rem;font-size:0.75rem;color:var(--accent,#6366f1);text-decoration:none;opacity:0.85;" data-i18n="onboard.key.getApiKey">How to get →</a>
+          <a id="setup-get-apikey-link" class="setup-inline-link" href="#" target="_blank" rel="noopener" style="display:none;margin-left:0.5rem;"><span data-i18n="onboard.key.getApiKey">How to get</span><svg class="setup-btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>
         </label>
         <div class="setup-input-row">
           <input id="setup-api-key" type="password" class="setup-input" data-i18n-placeholder="settings.models.placeholder.apikey" placeholder="sk-…">
@@ -1663,15 +1670,15 @@
       </div>
 
       <div class="setup-docs-hint" style="font-size:0.75rem;margin-top:8px;margin-bottom:10px;text-align:left;">
-        <span style="color:var(--muted,#6b7280);" data-i18n="onboard.key.docsGuide.question">New to AI keys?</span>
-        <a id="setup-docs-link" href="https://www.openclacky.com/docs/ai-key-guide" target="_blank" rel="noopener" style="margin-left:0.25rem;color:var(--accent,#6366f1);text-decoration:none;" data-i18n="onboard.key.docsGuide.cta">See the guide →</a>
+        <span style="color:var(--color-text-secondary);" data-i18n="onboard.key.docsGuide.question">New to AI keys?</span>
+        <a id="setup-docs-link" class="setup-inline-link" href="https://www.openclacky.com/docs/ai-key-guide" target="_blank" rel="noopener" style="margin-left:0.25rem;"><span data-i18n="onboard.key.docsGuide.cta">See the guide</span><svg class="setup-btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></a>
       </div>
 
       <div id="setup-test-result" class="setup-test-result" style="min-height:0;"></div>
 
       <div class="setup-key-actions">
-        <button id="setup-btn-back" class="setup-back-btn" data-i18n="onboard.key.btn.back">← Back</button>
-        <button id="setup-btn-test" class="setup-submit-btn" data-i18n="onboard.key.btn.test">Test & Continue →</button>
+        <button id="setup-btn-back" class="setup-back-btn"><svg class="setup-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg><span data-i18n="onboard.key.btn.back">Back</span></button>
+        <button id="setup-btn-test" class="setup-submit-btn"><span id="setup-btn-test-label" data-i18n="onboard.key.btn.test">Test &amp; Continue</span><svg class="setup-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
       </div>
       </div>
     </div>
