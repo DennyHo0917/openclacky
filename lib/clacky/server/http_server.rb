@@ -5506,6 +5506,7 @@ module Clacky
           name:    skill.identifier,
           content: raw,
           path:    skill_md,
+          frontmatter: skill.frontmatter || {},
           fields:  {
             name:           skill.identifier,
             name_zh:        skill.name_zh.to_s,

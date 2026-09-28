@@ -648,7 +648,10 @@
           </div>
           <div class="skills-tabs-controls">
             <!-- Search input -->
-            <input type="text" id="skills-search-input" class="skills-search" placeholder="Search skills…" data-i18n-placeholder="skills.search.placeholder" />
+            <div class="skills-search-box">
+              <svg class="skills-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="skills-search-input" class="skills-search" placeholder="Search skills…" data-i18n-placeholder="skills.search.placeholder" />
+            </div>
             <!-- Show system skills toggle (only visible in My Skills tab) -->
             <label class="skills-filter-toggle" id="label-show-system">
               <input type="checkbox" id="chk-show-system-skills">
@@ -702,6 +705,7 @@
           <div id="brand-skills-list"></div>
         </div>
       </div>
+      <div id="skills-detail" class="skill-detail" style="display:none"></div>
     </div>
 
     <!-- ── CHANNELS PANEL ─────────────────────────────────────────────── -->
