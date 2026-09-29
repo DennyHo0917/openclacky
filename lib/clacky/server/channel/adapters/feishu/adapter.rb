@@ -89,7 +89,7 @@ module Clacky
               domain: @config[:domain] || DEFAULT_DOMAIN
             )
 
-            @ws_client.start do |raw_event|
+            @ws_client.start(on_card_action: method(:handle_card_action)) do |raw_event|
               handle_event(raw_event)
             end
           end
@@ -126,6 +126,12 @@ module Clacky
           # @return [Boolean] Success status
           def update_message(chat_id, message_id, text)
             @bot.update_message(message_id, text)
+          end
+
+          # Send ask_user questions as a card with one button per option.
+          # @return [Hash, nil] nil when the card cannot express the questions
+          def send_questions(chat_id, questions, context: nil, reply_to: nil)
+            @bot.send_questions(chat_id, questions, context: context, reply_to: reply_to)
           end
 
           # Start a native CardKit session for task progress.
@@ -181,6 +187,26 @@ module Clacky
           rescue => e
             Clacky::Logger.warn("[feishu] Error handling event: #{e.message}")
             Clacky::Logger.warn(e.backtrace.first(5).join("\n"))
+          end
+
+          # Handle a card button click. The answer is routed back as a normal
+          # inbound message so the agent resumes exactly as if the user typed it.
+          # @param callback [Hash] card.action.trigger payload
+          # @return [Hash] callback response body for the Feishu client
+          def handle_card_action(callback)
+            operator = callback.dig("event", "operator") || {}
+            user_id = operator["open_id"]
+
+            allowed_users = @config[:allowed_users]
+            return {} if allowed_users && !allowed_users.empty? && !allowed_users.include?(user_id)
+
+            result = @bot.answer_question_card(callback)
+            dispatch_card_answer(callback, user_id, result[:text]) if result[:text]
+
+            result[:reply] || {}
+          rescue => e
+            Clacky::Logger.warn("[feishu] Error handling card action: #{e.message}")
+            {}
           end
 
           # Handle message event
@@ -256,6 +282,28 @@ module Clacky
             end
 
             @on_message&.call(event)
+          end
+
+          # The callback frame must be answered within 3 seconds, and routing a
+          # message can block on interrupting a running task — so dispatch the
+          # answer off this thread.
+          private def dispatch_card_answer(callback, user_id, text)
+            context = callback.dig("event", "context") || {}
+            event = {
+              type: :message,
+              platform: :feishu,
+              chat_id: context["open_chat_id"],
+              user_id: user_id,
+              text: text,
+              message_id: context["open_message_id"],
+              timestamp: Time.now,
+              chat_type: :direct,
+              raw: callback
+            }
+
+            Clacky::ThreadRegistry.spawn(name: "feishu-card-answer") do
+              @on_message&.call(event)
+            end
           end
 
           # Fetch Feishu document content and append to event[:text].

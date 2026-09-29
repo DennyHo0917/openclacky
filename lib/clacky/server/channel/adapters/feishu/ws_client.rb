@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "websocket"
+require "base64"
 require "json"
 require "net/http"
 require "uri"
@@ -16,6 +17,7 @@ module Clacky
         # method=0 → control (ping/pong/handshake), method=1 → data (event)
         class WSClient
           RECONNECT_DELAY = 5 # seconds
+          CARD_ACTION_EVENT_TYPE = "card.action.trigger"
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -29,9 +31,12 @@ module Clacky
             @service_id = 0
           end
 
-          def start(&on_event)
+          # @param on_card_action [Proc] called with the card.action.trigger payload;
+          #   its return value is serialized as the callback response.
+          def start(on_card_action: nil, &on_event)
             @running = true
             @on_event = on_event
+            @on_card_action = on_card_action
             Clacky::Logger.info("[feishu-ws] Starting WebSocket client (app_id=#{@app_id})")
 
             while @running
@@ -220,29 +225,59 @@ module Clacky
           end
 
           def handle_data_frame(frame, headers)
-            return unless headers["type"] == "event"
-
             payload_bytes = frame[:payload]
             return unless payload_bytes && !payload_bytes.empty?
 
-            event_json = payload_bytes.force_encoding("UTF-8")
-            event_data = JSON.parse(event_json)
+            data = JSON.parse(payload_bytes.force_encoding("UTF-8"))
 
-            # Send ACK response
+            # Long-connection card callbacks arrive as event frames typed
+            # card.action.trigger, yet still expect the reply in the response.
+            if headers["type"] == "card" || card_action_event?(headers, data)
+              handle_card_frame(frame, data)
+            elsif headers["type"] == "event"
+              handle_event_frame(frame, data)
+            end
+          rescue JSON::ParserError => e
+            Clacky::Logger.warn("[feishu-ws] Failed to parse data payload: #{e.message}")
+          end
+
+          def card_action_event?(headers, data)
+            headers["type"] == "event" && data.dig("header", "event_type") == CARD_ACTION_EVENT_TYPE
+          end
+
+          def handle_event_frame(frame, event_data)
+            respond_to_frame(frame)
+
+            event_type = event_data.dig("header", "event_type") || event_data["type"]
+            Clacky::Logger.info("[feishu-ws] Dispatching event: #{event_type}")
+            @on_event&.call(event_data)
+          end
+
+          # Card callbacks are synchronous: Feishu shows an error to the user
+          # unless the response frame carries our reply within 3 seconds.
+          def handle_card_frame(frame, callback_data)
+            reply = begin
+              @on_card_action&.call(callback_data)
+            rescue => e
+              Clacky::Logger.warn("[feishu-ws] Card callback handler failed: #{e.message}")
+              nil
+            end
+
+            respond_to_frame(frame, reply: reply)
+          end
+
+          def respond_to_frame(frame, reply: nil)
+            response = { code: 200 }
+            response[:data] = Base64.strict_encode64(JSON.generate(reply)) if reply
+
             send_frame(
               seq_id: frame[:seq_id],
               log_id: frame[:log_id],
               service: frame[:service],
               method: 1,
               headers: frame[:headers],
-              payload: JSON.generate({ code: 200 })
+              payload: JSON.generate(response)
             )
-
-            event_type = event_data.dig("header", "event_type") || event_data["type"]
-            Clacky::Logger.info("[feishu-ws] Dispatching event: #{event_type}")
-            @on_event&.call(event_data)
-          rescue JSON::ParserError => e
-            Clacky::Logger.warn("[feishu-ws] Failed to parse event payload: #{e.message}")
           end
 
           def send_frame(seq_id:, log_id:, service:, method:, headers:, payload: nil)

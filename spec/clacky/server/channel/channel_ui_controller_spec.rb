@@ -413,6 +413,47 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       expect(sent).to be_empty
     end
 
+    context "with an adapter that has interactive question cards" do
+      let(:asked) { [] }
+      let(:card_result) { { message_id: "om_card" } }
+      let(:adapter) do
+        rec = sent
+        calls = asked
+        double("card adapter").tap do |a|
+          allow(a).to receive(:send_text) { |_chat_id, text, _opts| rec << text }
+          allow(a).to receive(:send_questions) do |chat_id, questions, context:, reply_to:|
+            calls << [chat_id, questions, context, reply_to]
+            card_result
+          end
+        end
+      end
+
+      it "asks through the card instead of the markdown fallback" do
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent).to be_empty
+        chat_id, questions, context, reply_to = asked.first
+        expect(chat_id).to eq("chat_1")
+        expect(reply_to).to eq("msg_1")
+        expect(context).to eq("")
+        expect(questions.map { |q| q[:question] }).to eq(["语言选中文还是英文?", "输出格式选 Markdown 还是纯文本?"])
+      end
+
+      it "falls back to text when the card cannot express the questions" do
+        allow(adapter).to receive(:send_questions).and_return(nil)
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent.first).to include("语言选中文还是英文?", "1. 中文")
+      end
+
+      it "falls back to text when sending the card fails" do
+        allow(adapter).to receive(:send_questions).and_raise(StandardError, "boom")
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent.first).to include("语言选中文还是英文?")
+      end
+    end
+
     it "still suppresses every other tool" do
       controller.show_tool_call("terminal", { "command" => "ls" })
       controller.show_tool_call("write", { "path" => "a.rb" })

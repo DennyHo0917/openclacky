@@ -156,7 +156,9 @@ module Clacky
 
           context = args_data.is_a?(Hash) ? (args_data[:context] || args_data["context"]).to_s : ""
           flush_buffer
-          send_text(Clacky::Tools::AskUser.render_text(questions, context))
+          unless send_questions(questions, context)
+            send_text(Clacky::Tools::AskUser.render_text(questions, context))
+          end
           return
         end
 
@@ -303,6 +305,18 @@ module Clacky
       rescue StandardError => e
         Clacky::Logger.warn("[ChannelUI] send_text failed", platform: @platform, chat_id: @chat_id, error: e)
         nil
+      end
+
+      # Ask through a native interactive card when the platform has one.
+      # @return [Boolean] false when the caller must fall back to plain text
+      private def send_questions(questions, context)
+        adapter = @adapter_resolver.call
+        return false unless adapter.respond_to?(:send_questions)
+
+        !adapter.send_questions(@chat_id, questions, context: context, reply_to: @message_id).nil?
+      rescue StandardError => e
+        Clacky::Logger.warn("[ChannelUI] send_questions failed", platform: @platform, error: e)
+        false
       end
 
       def send_file(path, name = nil)

@@ -3,6 +3,7 @@
 require "faraday"
 require "faraday/multipart"
 require "json"
+require "securerandom"
 require "uri"
 
 module Clacky
@@ -66,7 +67,10 @@ module Clacky
           CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_COLORS.keys.freeze
           CARDKIT_LOCALE_CODES = { "zh" => "zh_cn", "en" => "en_us" }.freeze
           CARDKIT_SUMMARY_MAX_LENGTH = 50
+          QUESTION_CARD_TOKEN_KEY = "question_card"
+          QUESTION_CARD_LIMIT = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
+          QuestionCardSession = Struct.new(:token, :questions, :context, :answers)
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -76,6 +80,8 @@ module Clacky
             @token_expires_at = nil
             @progress_cards = {}
             @progress_cards_mutex = Mutex.new
+            @question_cards = {}
+            @question_cards_mutex = Mutex.new
 
           end
 
@@ -180,6 +186,69 @@ module Clacky
           rescue => e
             Clacky::Logger.warn("[feishu] Failed to update progress card: #{e.message}")
             false
+          end
+
+          # Send ask_user questions as a card whose options are clickable buttons.
+          # Returns nil when the questions need interactions the card cannot
+          # express, so the caller can fall back to plain text.
+          # @return [Hash, nil] Response with :message_id
+          def send_questions(chat_id, questions, context: nil, reply_to: nil)
+            return nil unless question_card_supported?(questions)
+
+            session = QuestionCardSession.new(SecureRandom.hex(8), questions, context.to_s, {})
+            payload = {
+              receive_id: chat_id,
+              msg_type: "interactive",
+              content: JSON.generate(build_question_card(session))
+            }
+            payload[:reply_to_message_id] = reply_to if reply_to
+
+            # Registered up front: a click can reach us before the send call returns.
+            register_question_card(session)
+            response = post("/open-apis/im/v1/messages", payload, params: { receive_id_type: "chat_id" })
+            if response["code"] != 0
+              Clacky::Logger.warn("[feishu] send_questions failed",
+                code: response["code"], msg: response["msg"], chat_id: chat_id)
+              @question_cards_mutex.synchronize { @question_cards.delete(session.token) }
+              return nil
+            end
+
+            { message_id: response.dig("data", "message_id") }
+          end
+
+          # Record one option click on a question card.
+          # @return [Hash] :reply for the callback response, and :text with the
+          #   full answer once every question of the card has been answered.
+          def answer_question_card(callback)
+            value = callback.dig("event", "action", "value")
+            value = (JSON.parse(value) rescue nil) if value.is_a?(String)
+            return { reply: {} } unless value.is_a?(Hash)
+
+            token = value[QUESTION_CARD_TOKEN_KEY].to_s
+            return { reply: {} } if token.empty?
+
+            session = @question_cards_mutex.synchronize { @question_cards[token] }
+            return { reply: { toast: question_card_toast("expired", "warning") } } unless session
+
+            question = session.questions[value["question"].to_i]
+            return { reply: {} } unless question
+
+            answer = Array(question[:options])[value["option"].to_i]
+            return { reply: {} } unless answer
+
+            @question_cards_mutex.synchronize do
+              session.answers[value["question"].to_i] = answer
+              complete = session.answers.size == session.questions.size
+              @question_cards.delete(token) if complete
+
+              {
+                reply: {
+                  toast: question_card_toast("recorded", "success"),
+                  card: { type: "raw", data: build_question_card(session) }
+                },
+                text: complete ? question_card_answer_text(session) : nil
+              }
+            end
           end
 
           # Upload a local file to Feishu and send it to a chat.
@@ -481,6 +550,107 @@ module Clacky
             return clean if clean.length <= CARDKIT_SUMMARY_MAX_LENGTH
 
             "#{clean[0, CARDKIT_SUMMARY_MAX_LENGTH - 3]}..."
+          end
+
+          # Buttons answer one question per click, so a question needing several
+          # picks — or with nothing to pick — has to stay on the text fallback.
+          private def question_card_supported?(questions)
+            questions.is_a?(Array) && !questions.empty? &&
+              questions.all? { |q| !q[:multi] && !Array(q[:options]).empty? }
+          end
+
+          private def build_question_card(session)
+            elements = []
+            unless session.context.empty?
+              elements << markdown_element(Clacky::I18n.translations("channel.questions.context")) do |label|
+                "**#{label}:** #{sanitize_images_for_card(session.context)}"
+              end
+            end
+
+            session.questions.each_with_index do |question, index|
+              elements.concat(question_card_elements(session, question, index))
+            end
+
+            { schema: "2.0", body: { elements: elements } }
+          end
+
+          private def question_card_elements(session, question, index)
+            heading = if session.questions.size > 1
+              Clacky::I18n.translations("channel.questions.numbered", index: index + 1)
+            else
+              Clacky::I18n.translations("channel.questions.single")
+            end
+
+            elements = [markdown_element(heading) { |label| "**#{label}:** #{sanitize_images_for_card(question[:question])}" }]
+            unless question[:description].to_s.empty?
+              elements << markdown_element(question[:description], text_size: "notation") { |t| sanitize_images_for_card(t) }
+            end
+
+            answer = session.answers[index]
+            if answer
+              elements << markdown_element(answer) { |t| "✅ #{sanitize_images_for_card(t)}" }
+              return elements
+            end
+
+            question[:options].each_with_index do |option, option_index|
+              elements << question_option_button(
+                session.token, index, option_index, option,
+                recommended: question[:recommended] == option_index
+              )
+            end
+            if question[:allow_free_text]
+              elements << markdown_element(
+                Clacky::I18n.translations("channel.questions.free_text_hint"),
+                text_size: "notation"
+              ) { |t| t }
+            end
+            elements
+          end
+
+          private def question_option_button(token, question_index, option_index, label, recommended:)
+            {
+              tag: "button",
+              type: recommended ? "primary" : "default",
+              size: "small",
+              width: "fill",
+              text: { tag: "plain_text", content: label },
+              behaviors: [{
+                type: "callback",
+                value: {
+                  QUESTION_CARD_TOKEN_KEY => token,
+                  "question" => question_index,
+                  "option" => option_index
+                }
+              }]
+            }
+          end
+
+          private def question_card_answer_text(session)
+            return session.answers[0].to_s if session.questions.size == 1
+
+            session.questions.each_with_index.map do |question, index|
+              "#{question[:question]}: #{session.answers[index]}"
+            end.join("\n")
+          end
+
+          private def question_card_toast(key, type)
+            text = Clacky::I18n.translations("channel.questions.#{key}")
+            {
+              type: type,
+              content: text.fetch(Clacky::I18n::DEFAULT_LOCALE),
+              i18n: text.map { |code, value| [CARDKIT_LOCALE_CODES.fetch(code), value] }.to_h
+            }
+          end
+
+          private def register_question_card(session)
+            @question_cards_mutex.synchronize do
+              @question_cards[session.token] = session
+              @question_cards.shift while @question_cards.size > QUESTION_CARD_LIMIT
+            end
+          end
+
+          private def markdown_element(text, extra = {}, &block)
+            { tag: "markdown" }.merge(extra).merge(localized_card_text(text, &block))
           end
 
           private def perform_cardkit_request(action, card_id)

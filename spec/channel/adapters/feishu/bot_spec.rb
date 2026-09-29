@@ -382,4 +382,127 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       end
     end
   end
+
+  describe "question cards" do
+    let(:questions) do
+      [{
+        question: "Dinner?",
+        description: "",
+        options: ["Hotpot", "Sushi"],
+        multi: false,
+        allow_free_text: true,
+        recommended: 1
+      }]
+    end
+
+    let(:sent) { [] }
+
+    before do
+      allow(bot).to receive(:post) do |path, payload, params: {}|
+        sent << [path, payload, params]
+        { "code" => 0, "data" => { "message_id" => "om_card" } }
+      end
+    end
+
+    def click(token, question: 0, option: 0)
+      bot.answer_question_card(
+        "event" => { "action" => { "value" => { "question_card" => token, "question" => question, "option" => option } } }
+      )
+    end
+
+    def card_token
+      button = JSON.parse(sent.last[1][:content]).dig("body", "elements").find { |e| e["tag"] == "button" }
+      button.dig("behaviors", 0, "value", "question_card")
+    end
+
+    it "renders one callback button per option and highlights the recommendation" do
+      expect(bot.send_questions("oc_chat", questions, context: "Pick one", reply_to: "om_user")).to eq(message_id: "om_card")
+
+      path, payload, params = sent.last
+      expect(path).to eq("/open-apis/im/v1/messages")
+      expect(params).to eq(receive_id_type: "chat_id")
+      expect(payload[:msg_type]).to eq("interactive")
+      expect(payload[:reply_to_message_id]).to eq("om_user")
+
+      card = JSON.parse(payload[:content])
+      expect(card["schema"]).to eq("2.0")
+      elements = card.dig("body", "elements")
+      expect(elements[0]["content"]).to eq("**Context:** Pick one")
+      expect(elements[0]["i18n_content"]).to eq("zh_cn" => "**背景:** Pick one", "en_us" => "**Context:** Pick one")
+      expect(elements[1]["content"]).to eq("**Question:** Dinner?")
+      expect(elements[1]["i18n_content"]).to eq("zh_cn" => "**问题:** Dinner?", "en_us" => "**Question:** Dinner?")
+
+      buttons = elements.select { |e| e["tag"] == "button" }
+      expect(buttons.map { |b| b.dig("text", "content") }).to eq(["Hotpot", "Sushi"])
+      expect(buttons.map { |b| b["type"] }).to eq(%w[default primary])
+      expect(buttons[0]["behaviors"]).to eq([{
+        "type" => "callback",
+        "value" => { "question_card" => card_token, "question" => 0, "option" => 0 }
+      }])
+      expect(elements.last["content"]).to eq("Or reply with your own answer.")
+    end
+
+    it "returns the clicked option as the answer and replaces the buttons with it" do
+      bot.send_questions("oc_chat", questions)
+
+      result = click(card_token, option: 1)
+
+      expect(result[:text]).to eq("Sushi")
+      expect(result[:reply][:toast][:type]).to eq("success")
+      expect(result[:reply][:toast][:i18n]).to eq("zh_cn" => "已记录你的选择", "en_us" => "Answer recorded")
+      answered = result[:reply][:card][:data].dig(:body, :elements)
+      expect(answered.none? { |e| e[:tag] == "button" }).to be true
+      expect(answered.last[:content]).to eq("✅ Sushi")
+    end
+
+    it "waits for every question before answering and keeps unanswered buttons" do
+      multi = questions + [{
+        question: "Drink?",
+        description: "",
+        options: ["Tea"],
+        multi: false,
+        allow_free_text: false,
+        recommended: nil
+      }]
+      bot.send_questions("oc_chat", multi)
+      token = card_token
+
+      first = click(token, question: 0, option: 0)
+      expect(first[:text]).to be_nil
+      remaining = first[:reply][:card][:data].dig(:body, :elements).select { |e| e[:tag] == "button" }
+      expect(remaining.map { |b| b.dig(:text, :content) }).to eq(["Tea"])
+
+      second = click(token, question: 1, option: 0)
+      expect(second[:text]).to eq("Dinner?: Hotpot\nDrink?: Tea")
+    end
+
+    it "warns instead of answering when the card is no longer tracked" do
+      result = click("gone")
+
+      expect(result[:text]).to be_nil
+      expect(result[:reply][:toast][:type]).to eq("warning")
+      expect(result[:reply][:toast][:content]).to eq("This question is no longer active.")
+    end
+
+    it "ignores a click that is not a question card callback" do
+      expect(bot.answer_question_card("event" => { "action" => {} })).to eq(reply: {})
+    end
+
+    it "declines questions the buttons cannot express" do
+      expect(bot.send_questions("oc_chat", [questions.first.merge(multi: true)])).to be_nil
+      expect(bot.send_questions("oc_chat", [questions.first.merge(options: [])])).to be_nil
+      expect(bot.send_questions("oc_chat", [])).to be_nil
+      expect(sent).to be_empty
+    end
+
+    it "forgets a card whose send failed so a later click cannot answer it" do
+      allow(bot).to receive(:post) do |path, payload, params: {}|
+        sent << [path, payload, params]
+        { "code" => 230001, "msg" => "nope" }
+      end
+
+      expect(bot.send_questions("oc_chat", questions)).to be_nil
+      expect(click(card_token)[:reply][:toast][:type]).to eq("warning")
+    end
+  end
 end
