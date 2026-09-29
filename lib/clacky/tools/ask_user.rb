@@ -90,16 +90,8 @@ module Clacky
         raw = [] unless raw.is_a?(Array)
 
         list = raw.map { |item| normalize_question(item) }.compact
-
-        if list.empty?
-          question = fetch_key(args, :question).to_s.strip
-          return [] if question.empty?
-
-          list = [normalize_question(
-            question: question,
-            options: fetch_key(args, :options)
-          )].compact
-        end
+        # The single-question shorthand carries the same per-question keys at the top level.
+        list = [normalize_question(args)].compact if list.empty?
 
         list
       end

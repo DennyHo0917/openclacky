@@ -21,19 +21,9 @@ module Clacky
       BUFFER_FLUSH_SIZE = 5  # flush early when buffer is large
       PROCESS_STATUS_MAX_LENGTH = 240
       TERMINAL_PROGRESS_STATES = %i[waiting success failed interrupted].freeze
-      TOOL_PROGRESS_MESSAGES = {
-        "browser" => "Using the browser...",
-        "edit" => "Editing a file...",
-        "file_reader" => "Reading a file...",
-        "glob" => "Finding files...",
-        "grep" => "Searching files...",
-        "invoke_skill" => "Using a skill...",
-        "terminal" => "Running a command...",
-        "todo_manager" => "Updating the task plan...",
-        "web_fetch" => "Reading a web page...",
-        "web_search" => "Searching the web...",
-        "write" => "Writing a file..."
-      }.freeze
+      PROGRESS_TOOLS = %w[
+        browser edit file_reader glob grep invoke_skill terminal todo_manager web_fetch web_search write
+      ].freeze
 
       attr_reader :platform, :chat_id
 
@@ -87,12 +77,12 @@ module Clacky
 
         adapter = @adapter_resolver.call
         unless progress_updates_supported?(adapter)
-          send_text("Thinking...", reply_to: nil)
+          send_text(plain_text(progress_text("thinking")), reply_to: nil)
           return false
         end
 
         chat_id, reply_to = @mutex.synchronize { [@chat_id, @message_id] }
-        result = adapter.send_progress(chat_id, "Thinking...", reply_to: reply_to, state: :running)
+        result = adapter.send_progress(chat_id, progress_text("thinking"), reply_to: reply_to, state: :running)
         progress_id = result && (result[:progress_id] || result["progress_id"] ||
           result[:message_id] || result["message_id"])
         raise "Progress message did not return a progress_id" if progress_id.to_s.empty?
@@ -106,14 +96,14 @@ module Clacky
       rescue StandardError => e
         reset_progress
         Clacky::Logger.warn("[ChannelUI] progress card start failed", platform: @platform, error: e)
-        send_text("Thinking...", reply_to: nil)
+        send_text(plain_text(progress_text("thinking")), reply_to: nil)
         false
       end
 
       # Mark an active task as interrupted. Returns true only when an in-place
       # progress update replaced the need for a separate interruption message.
       def interrupt_task
-        update_active_progress("Task interrupted.", state: :interrupted)
+        update_active_progress(progress_text("task_interrupted"), state: :interrupted)
       end
 
       # Forward WebUI user messages to the IM channel so both sides stay in sync.
@@ -166,7 +156,9 @@ module Clacky
 
           context = args_data.is_a?(Hash) ? (args_data[:context] || args_data["context"]).to_s : ""
           flush_buffer
-          send_text(Clacky::Tools::AskUser.render_text(questions, context))
+          unless send_questions(questions, context)
+            send_text(Clacky::Tools::AskUser.render_text(questions, context))
+          end
           return
         end
 
@@ -216,20 +208,26 @@ module Clacky
         return unless status_messages?
 
         if awaiting_user_feedback
-          return if finalize_progress("Waiting for your response.", state: :waiting)
+          return if finalize_progress(progress_text("waiting_response"), state: :waiting)
         end
 
-        parts = ["Done", "#{iterations} step#{"s" if iterations != 1}"]
         # Only show cost when pricing source is known (model matched pricing table).
         # Unknown models return nil — skip to avoid misleading numbers.
-        if cost && cost > 0 && cost_source
-          parts << "$#{cost.round(4)}"
+        show_cost = cost && cost > 0 && cost_source
+        summary = Clacky::I18n.localized do |code|
+          step_key = iterations == 1 ? "channel.progress.step" : "channel.progress.steps"
+          parts = [
+            Clacky::I18n.translate(code, "channel.progress.status.success"),
+            Clacky::I18n.translate(code, step_key, count: iterations)
+          ]
+          parts << "$#{cost.round(4)}" if show_cost
+          parts << "#{duration.round(1)}s" if duration
+          parts.join(" · ")
         end
-        parts << "#{duration.round(1)}s" if duration
         return if progress_finished?
-        return if finalize_progress(parts.join(" · "), state: :success)
+        return if finalize_progress(summary, state: :success)
 
-        send_text(parts.join(" · "))
+        send_text(plain_text(summary))
         flush_adapter_pending
       end
 
@@ -250,9 +248,11 @@ module Clacky
       end
 
       def show_error(message, code: nil, top_up_url: nil, raw_message: nil)
-        text = "Error: #{message}"
-        text += "\n#{top_up_url}" if top_up_url
-        send_text(text) unless finalize_progress(text, state: :failed)
+        text = Clacky::I18n.localized do |locale|
+          error = Clacky::I18n.translate(locale, "channel.progress.error", message: message)
+          top_up_url ? "#{error}\n#{top_up_url}" : error
+        end
+        send_text(plain_text(text)) unless finalize_progress(text, state: :failed)
       end
 
       def show_success(message)
@@ -307,6 +307,18 @@ module Clacky
         nil
       end
 
+      # Ask through a native interactive card when the platform has one.
+      # @return [Boolean] false when the caller must fall back to plain text
+      private def send_questions(questions, context)
+        adapter = @adapter_resolver.call
+        return false unless adapter.respond_to?(:send_questions)
+
+        !adapter.send_questions(@chat_id, questions, context: context, reply_to: @message_id).nil?
+      rescue StandardError => e
+        Clacky::Logger.warn("[ChannelUI] send_questions failed", platform: @platform, error: e)
+        false
+      end
+
       def send_file(path, name = nil)
         adapter = @adapter_resolver.call
         unless adapter
@@ -345,7 +357,7 @@ module Clacky
         end
         return false unless progress_id
 
-        update_active_progress("Working...", state: :working)
+        update_active_progress(progress_text("working"), state: :working)
       end
 
       # Route compact process signals into the active progress card. Returning
@@ -357,7 +369,7 @@ module Clacky
         # belong to the completed task and must not leak out as new messages.
         return true if progress_finished?
 
-        status = compact_process_status(text)
+        status = text.is_a?(Hash) ? text : compact_process_status(text)
         return false if status.empty?
 
         update_active_progress(status, state: :working)
@@ -371,7 +383,7 @@ module Clacky
         return false if content.empty?
 
         update_active_progress(
-          "Working...",
+          progress_text("working"),
           state: :working,
           content: content,
           history_entry: content
@@ -386,7 +398,18 @@ module Clacky
       end
 
       private def tool_progress_message(name)
-        TOOL_PROGRESS_MESSAGES.fetch(name.to_s.downcase, "Working...")
+        tool = name.to_s.downcase
+        progress_text(PROGRESS_TOOLS.include?(tool) ? "tool.#{tool}" : "working")
+      end
+
+      private def progress_text(key)
+        Clacky::I18n.translations("channel.progress.#{key}")
+      end
+
+      # Standalone messages keep the default locale; only native progress
+      # cards render every translation for the viewer's client language.
+      private def plain_text(text)
+        text.fetch(Clacky::I18n::DEFAULT_LOCALE)
       end
 
       private def finalize_progress(text, state:)

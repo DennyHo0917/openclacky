@@ -3,6 +3,7 @@
 require "faraday"
 require "faraday/multipart"
 require "json"
+require "securerandom"
 require "uri"
 
 module Clacky
@@ -56,15 +57,20 @@ module Clacky
           CARDKIT_CONTENT_ELEMENT_ID = "content"
           CARDKIT_PROCESS_ELEMENT_ID = "process_history"
           CARDKIT_STATUS_ELEMENT_ID = "status"
-          CARDKIT_TERMINAL_STATUS_TEXT = {
-            waiting: "Waiting for input",
-            success: "Done",
-            failed: "Failed",
-            interrupted: "Stopped"
+          CARDKIT_RUNNING_STATUS_COLOR = "grey"
+          CARDKIT_TERMINAL_STATUS_COLORS = {
+            waiting: "orange",
+            success: "green",
+            failed: "red",
+            interrupted: "grey"
           }.freeze
-          CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_TEXT.keys.freeze
+          CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_COLORS.keys.freeze
+          CARDKIT_LOCALE_CODES = { "zh" => "zh_cn", "en" => "en_us" }.freeze
           CARDKIT_SUMMARY_MAX_LENGTH = 50
+          QUESTION_CARD_TOKEN_KEY = "question_card"
+          QUESTION_CARD_LIMIT = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
+          QuestionCardSession = Struct.new(:token, :chat_id, :questions, :context, :answers, :selections)
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -74,6 +80,8 @@ module Clacky
             @token_expires_at = nil
             @progress_cards = {}
             @progress_cards_mutex = Mutex.new
+            @question_cards = {}
+            @question_cards_mutex = Mutex.new
 
           end
 
@@ -178,6 +186,69 @@ module Clacky
           rescue => e
             Clacky::Logger.warn("[feishu] Failed to update progress card: #{e.message}")
             false
+          end
+
+          # Send ask_user questions as a card whose options are clickable buttons.
+          # Returns nil when the questions need interactions the card cannot
+          # express, so the caller can fall back to plain text.
+          # @return [Hash, nil] Response with :message_id
+          def send_questions(chat_id, questions, context: nil, reply_to: nil)
+            return nil unless question_card_supported?(questions)
+
+            selections = questions.map { |q| q[:recommended] ? [q[:recommended]] : [] }
+            session = QuestionCardSession.new(SecureRandom.hex(8), chat_id, questions, context.to_s, {}, selections)
+            payload = {
+              receive_id: chat_id,
+              msg_type: "interactive",
+              content: JSON.generate(build_question_card(session))
+            }
+            payload[:reply_to_message_id] = reply_to if reply_to
+
+            # Registered up front: a click can reach us before the send call returns.
+            register_question_card(session)
+            response = post("/open-apis/im/v1/messages", payload, params: { receive_id_type: "chat_id" })
+            if response["code"] != 0
+              Clacky::Logger.warn("[feishu] send_questions failed",
+                code: response["code"], msg: response["msg"], chat_id: chat_id)
+              @question_cards_mutex.synchronize { @question_cards.delete(session.token) }
+              return nil
+            end
+
+            { message_id: response.dig("data", "message_id") }
+          end
+
+          # Record one click on a question card: an option pick, or the submit
+          # button of a card that has multi-select questions.
+          # @return [Hash] :reply for the callback response, and :text with the
+          #   full answer once every question of the card has been answered.
+          def answer_question_card(callback)
+            value = callback.dig("event", "action", "value")
+            value = (JSON.parse(value) rescue nil) if value.is_a?(String)
+            return { reply: {} } unless value.is_a?(Hash)
+
+            token = value[QUESTION_CARD_TOKEN_KEY].to_s
+            return { reply: {} } if token.empty?
+
+            # Lookup and mutation share one lock so a double click cannot answer twice.
+            @question_cards_mutex.synchronize do
+              session = @question_cards[token]
+              next { reply: { toast: question_card_toast("expired", "warning") } } unless session
+
+              if value["submit"]
+                submit_question_card(session)
+              else
+                pick_question_option(session, value["question"].to_i, value["option"].to_i)
+              end
+            end
+          end
+
+          # Drop the pending question cards of a chat: the user answered by
+          # typing, so a later click on those buttons must not answer again.
+          # @return [void]
+          def forget_question_cards(chat_id)
+            @question_cards_mutex.synchronize do
+              @question_cards.delete_if { |_, session| session.chat_id == chat_id }
+            end
           end
 
           # Upload a local file to Feishu and send it to a chat.
@@ -295,7 +366,7 @@ module Clacky
               schema: "2.0",
               config: {
                 streaming_mode: true,
-                summary: { content: "[Generating...]" },
+                summary: localized_card_text(Clacky::I18n.translations("channel.progress.generating")) { |t| t },
                 streaming_config: {
                   print_frequency_ms: { default: 50 },
                   print_step: { default: 1 }
@@ -303,12 +374,8 @@ module Clacky
               },
               body: {
                 elements: [
-                  { tag: "markdown", content: "", element_id: CARDKIT_CONTENT_ELEMENT_ID },
-                  {
-                    tag: "markdown",
-                    content: progress_status_markdown(text),
-                    element_id: CARDKIT_STATUS_ELEMENT_ID
-                  }
+                  content_element(""),
+                  status_element(text)
                 ]
               }
             })
@@ -319,23 +386,55 @@ module Clacky
               tag: "collapsible_panel",
               expanded: false,
               header: {
-                title: { tag: "plain_text", content: "View process" },
+                title: {
+                  tag: "plain_text",
+                  text_color: "grey",
+                  text_size: "notation"
+                }.merge(localized_card_text(Clacky::I18n.translations("channel.progress.view_process")) { |t| t }),
+                vertical_align: "center",
                 icon: {
                   tag: "standard_icon",
                   token: "down-small-ccm_outlined",
+                  color: "grey",
                   size: "16px 16px"
                 },
                 icon_position: "right",
                 icon_expanded_angle: -180
               },
               border: { color: "grey", corner_radius: "5px" },
-              elements: [
-                {
-                  tag: "markdown",
-                  content: sanitize_images_for_card(history.to_s),
-                  element_id: CARDKIT_PROCESS_ELEMENT_ID
-                }
-              ]
+              vertical_spacing: "8px",
+              padding: "8px 8px 8px 8px",
+              elements: [process_history_element(history)]
+            }
+          end
+
+          private def process_history_element(history)
+            {
+              tag: "markdown",
+              content: sanitize_images_for_card(history.to_s),
+              text_size: "notation",
+              element_id: CARDKIT_PROCESS_ELEMENT_ID
+            }
+          end
+
+          private def content_element(text)
+            { tag: "markdown", element_id: CARDKIT_CONTENT_ELEMENT_ID }
+              .merge(localized_card_text(text) { |t| sanitize_images_for_card(t) })
+          end
+
+          private def status_element(text, color: CARDKIT_RUNNING_STATUS_COLOR)
+            { tag: "markdown", element_id: CARDKIT_STATUS_ELEMENT_ID }
+              .merge(localized_card_text(text) { |t| progress_status_markdown(t, color) })
+          end
+
+          # Text is a String, or a { locale => String } Hash rendered through
+          # Feishu per-component i18n so each viewer sees their client language.
+          private def localized_card_text(text)
+            return { content: yield(text.to_s) } unless text.is_a?(Hash)
+
+            {
+              content: yield(text.fetch(Clacky::I18n::DEFAULT_LOCALE)),
+              i18n_content: text.map { |code, value| [CARDKIT_LOCALE_CODES.fetch(code), yield(value)] }.to_h
             }
           end
 
@@ -344,7 +443,7 @@ module Clacky
 
             if session.process_panel
               perform_cardkit_request(action, session.card_id) do
-                replace_card_markdown_element(session, CARDKIT_PROCESS_ELEMENT_ID, history)
+                replace_card_element(session, process_history_element(history))
               end
             else
               response = perform_cardkit_request("insert process panel", session.card_id) do
@@ -359,16 +458,12 @@ module Clacky
 
             content_response = if content
               perform_cardkit_request("replace progress content", session.card_id) do
-                replace_card_markdown_element(session, CARDKIT_CONTENT_ELEMENT_ID, content)
+                replace_card_element(session, content_element(content))
               end
             end
 
             status_response = perform_cardkit_request("update progress status", session.card_id) do
-              put_card_element_content(
-                session,
-                CARDKIT_STATUS_ELEMENT_ID,
-                progress_status_markdown(text)
-              )
+              replace_card_element(session, status_element(text))
             end
             # The visible body is the primary delivery when narration is
             # present. A footer failure must not trigger a duplicate fallback
@@ -377,25 +472,23 @@ module Clacky
           end
 
           private def finalize_progress_card(session, text, state, history: nil)
-            safe_text = sanitize_images_for_card(text.to_s)
-            status_text = CARDKIT_TERMINAL_STATUS_TEXT.fetch(state.to_sym)
+            status_text = Clacky::I18n.translations("channel.progress.status.#{state}")
 
             write_process_history(session, "write final process history", history)
 
             content_response = perform_cardkit_request("write final progress content", session.card_id) do
-              replace_card_markdown_element(session, CARDKIT_CONTENT_ELEMENT_ID, safe_text)
+              replace_card_element(session, content_element(text))
             end
 
             perform_cardkit_request("write final progress status", session.card_id) do
-              put_card_element_content(
+              replace_card_element(
                 session,
-                CARDKIT_STATUS_ELEMENT_ID,
-                progress_status_markdown(status_text)
+                status_element(status_text, color: CARDKIT_TERMINAL_STATUS_COLORS.fetch(state.to_sym))
               )
             end
 
             perform_cardkit_request("close progress card", session.card_id) do
-              close_progress_card(session, safe_text)
+              close_progress_card(session, text)
             end
 
             session.closed = true
@@ -404,17 +497,12 @@ module Clacky
             content_response["code"] == 0
           end
 
-          private def replace_card_markdown_element(session, element_id, content)
-            safe_content = sanitize_images_for_card(content.to_s)
+          private def replace_card_element(session, element)
             sequence = next_progress_sequence(session)
             put(
-              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element_id}",
+              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element.fetch(:element_id)}",
               {
-                element: JSON.generate({
-                  tag: "markdown",
-                  content: safe_content,
-                  element_id: element_id
-                }),
+                element: JSON.generate(element),
                 sequence: sequence,
                 uuid: "r_#{session.card_id}_#{sequence}"
               }
@@ -427,22 +515,10 @@ module Clacky
               "/open-apis/cardkit/v1/cards/#{session.card_id}/elements",
               {
                 type: "insert_before",
-                target_element_id: CARDKIT_STATUS_ELEMENT_ID,
+                target_element_id: CARDKIT_CONTENT_ELEMENT_ID,
                 elements: JSON.generate([process_panel_element(history)]),
                 sequence: sequence,
                 uuid: "i_#{session.card_id}_#{sequence}"
-              }
-            )
-          end
-
-          private def put_card_element_content(session, element_id, content)
-            sequence = next_progress_sequence(session)
-            put(
-              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element_id}/content",
-              {
-                content: content,
-                sequence: sequence,
-                uuid: "u_#{session.card_id}_#{sequence}"
               }
             )
           end
@@ -453,7 +529,7 @@ module Clacky
               settings: JSON.generate({
                 config: {
                   streaming_mode: false,
-                  summary: { content: truncate_cardkit_summary(text) }
+                  summary: localized_card_text(text) { |t| truncate_cardkit_summary(sanitize_images_for_card(t)) }
                 }
               }),
               sequence: sequence,
@@ -465,8 +541,8 @@ module Clacky
             session.sequence += 1
           end
 
-          private def progress_status_markdown(text)
-            "<font color='grey'>#{sanitize_images_for_card(text.to_s)}</font>"
+          private def progress_status_markdown(text, color)
+            "<font color='#{color}'>#{sanitize_images_for_card(text.to_s)}</font>"
           end
 
           private def truncate_cardkit_summary(text)
@@ -474,6 +550,184 @@ module Clacky
             return clean if clean.length <= CARDKIT_SUMMARY_MAX_LENGTH
 
             "#{clean[0, CARDKIT_SUMMARY_MAX_LENGTH - 3]}..."
+          end
+
+          # Every question needs options to click; multi-select questions switch
+          # the card to pick-then-submit.
+          private def question_card_supported?(questions)
+            questions.is_a?(Array) && !questions.empty? &&
+              questions.all? { |q| !Array(q[:options]).empty? }
+          end
+
+          # Single-choice cards answer on click. Once any question takes several
+          # picks, clicks only toggle selections and a submit button sends them.
+          private def question_card_submit_mode?(session)
+            session.questions.any? { |q| q[:multi] }
+          end
+
+          private def pick_question_option(session, question_index, option_index)
+            question = session.questions[question_index]
+            return { reply: {} } unless question && question[:options][option_index]
+
+            unless question_card_submit_mode?(session)
+              session.answers[question_index] = question[:options][option_index]
+              return complete_question_card(session) if session.answers.size == session.questions.size
+
+              return { reply: { toast: question_card_toast("recorded", "success"), card: question_card_reply(session) } }
+            end
+
+            selection = session.selections[question_index]
+            if !question[:multi]
+              selection.replace([option_index])
+            elsif selection.include?(option_index)
+              selection.delete(option_index)
+            else
+              selection << option_index
+            end
+            { reply: { card: question_card_reply(session) } }
+          end
+
+          private def submit_question_card(session)
+            if session.selections.any?(&:empty?)
+              return { reply: { toast: question_card_toast("incomplete", "warning") } }
+            end
+
+            session.questions.each_with_index do |question, index|
+              session.answers[index] = session.selections[index].sort.map { |i| question[:options][i] }.join("; ")
+            end
+            complete_question_card(session)
+          end
+
+          private def complete_question_card(session)
+            @question_cards.delete(session.token)
+            {
+              reply: { toast: question_card_toast("recorded", "success"), card: question_card_reply(session) },
+              text: question_card_answer_text(session)
+            }
+          end
+
+          private def question_card_reply(session)
+            { type: "raw", data: build_question_card(session) }
+          end
+
+          private def build_question_card(session)
+            elements = []
+            unless session.context.empty?
+              elements << markdown_element(Clacky::I18n.translations("channel.questions.context")) do |label|
+                "**#{label}:** #{sanitize_images_for_card(session.context)}"
+              end
+            end
+
+            session.questions.each_with_index do |question, index|
+              elements.concat(question_card_elements(session, question, index))
+            end
+            if question_card_submit_mode?(session) && session.answers.empty?
+              elements << question_submit_button(session.token)
+            end
+
+            { schema: "2.0", body: { elements: elements } }
+          end
+
+          private def question_card_elements(session, question, index)
+            heading = if session.questions.size > 1
+              Clacky::I18n.translations("channel.questions.numbered", index: index + 1)
+            else
+              Clacky::I18n.translations("channel.questions.single")
+            end
+
+            elements = [markdown_element(heading) { |label| "**#{label}:** #{sanitize_images_for_card(question[:question])}" }]
+            unless question[:description].to_s.empty?
+              elements << markdown_element(question[:description], text_size: "notation") { |t| sanitize_images_for_card(t) }
+            end
+
+            answer = session.answers[index]
+            if answer
+              elements << markdown_element(answer) { |t| "✅ #{sanitize_images_for_card(t)}" }
+              return elements
+            end
+
+            submit_mode = question_card_submit_mode?(session)
+            question[:options].each_with_index do |option, option_index|
+              type = if submit_mode
+                session.selections[index].include?(option_index) ? "primary_filled" : "default"
+              else
+                question[:recommended] == option_index ? "primary" : "default"
+              end
+              elements << question_option_button(session.token, index, option_index, option, type: type)
+            end
+            if question[:multi]
+              elements << markdown_element(
+                Clacky::I18n.translations("channel.questions.multi_hint"),
+                text_size: "notation"
+              ) { |t| t }
+            end
+            if question[:allow_free_text]
+              elements << markdown_element(
+                Clacky::I18n.translations("channel.questions.free_text_hint"),
+                text_size: "notation"
+              ) { |t| t }
+            end
+            elements
+          end
+
+          private def question_option_button(token, question_index, option_index, label, type:)
+            {
+              tag: "button",
+              type: type,
+              size: "small",
+              width: "fill",
+              text: { tag: "plain_text", content: label },
+              behaviors: [{
+                type: "callback",
+                value: {
+                  QUESTION_CARD_TOKEN_KEY => token,
+                  "question" => question_index,
+                  "option" => option_index
+                }
+              }]
+            }
+          end
+
+          private def question_submit_button(token)
+            {
+              tag: "button",
+              type: "primary_filled",
+              size: "medium",
+              width: "fill",
+              text: { tag: "plain_text" }.merge(localized_card_text(Clacky::I18n.translations("channel.questions.submit")) { |t| t }),
+              behaviors: [{
+                type: "callback",
+                value: { QUESTION_CARD_TOKEN_KEY => token, "submit" => true }
+              }]
+            }
+          end
+
+          private def question_card_answer_text(session)
+            return session.answers[0].to_s if session.questions.size == 1
+
+            session.questions.each_with_index.map do |question, index|
+              "#{question[:question]}: #{session.answers[index]}"
+            end.join("\n")
+          end
+
+          private def question_card_toast(key, type)
+            text = Clacky::I18n.translations("channel.questions.#{key}")
+            {
+              type: type,
+              content: text.fetch(Clacky::I18n::DEFAULT_LOCALE),
+              i18n: text.map { |code, value| [CARDKIT_LOCALE_CODES.fetch(code), value] }.to_h
+            }
+          end
+
+          private def register_question_card(session)
+            @question_cards_mutex.synchronize do
+              @question_cards[session.token] = session
+              @question_cards.shift while @question_cards.size > QUESTION_CARD_LIMIT
+            end
+          end
+
+          private def markdown_element(text, extra = {}, &block)
+            { tag: "markdown" }.merge(extra).merge(localized_card_text(text, &block))
           end
 
           private def perform_cardkit_request(action, card_id)

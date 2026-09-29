@@ -21,6 +21,10 @@ RSpec.describe Clacky::Channel::ChannelUIController do
     @process_enabled = true
   end
 
+  def progress_text(key)
+    Clacky::I18n.translations("channel.progress.#{key}")
+  end
+
   def complete
     controller.show_complete(iterations: 1, cost: 0.0008, duration: 2.3, cost_source: :pricing)
   end
@@ -67,7 +71,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
     it "updates one progress message from thinking through working to the final reply" do
       expect(progress_controller.start_task).to be true
       expect(progress_adapter).to have_received(:send_progress)
-        .with("chat_1", "Thinking...", reply_to: "msg_1", state: :running)
+        .with("chat_1", progress_text("thinking"), reply_to: "msg_1", state: :running)
 
       progress_controller.show_tool_call("terminal", { "command" => "ls" })
       progress_controller.show_tool_call("write", { "path" => "a.rb" })
@@ -75,8 +79,8 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       progress_controller.show_complete(iterations: 2, cost: nil, duration: 1.2, cost_source: nil)
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Running a command...", :working],
-        ["chat_1", "card_1", "Writing a file...", :working],
+        ["chat_1", "card_1", progress_text("tool.terminal"), :working],
+        ["chat_1", "card_1", progress_text("tool.write"), :working],
         ["chat_1", "card_1", "All done", :success]
       ])
       expect(sent).to be_empty
@@ -90,7 +94,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       progress_controller.show_tool_call("write", { "path" => "a.rb" })
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Working...", :working]
+        ["chat_1", "card_1", progress_text("working"), :working]
       ])
       expect(sent).to be_empty
     end
@@ -105,7 +109,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       )
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Working...", :working]
+        ["chat_1", "card_1", progress_text("working"), :working]
       ])
       expect(progress_details).to eq([
         {
@@ -152,7 +156,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       progress_controller.show_tool_call("private_extension_tool", { "secret" => "value" })
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Working...", :working]
+        ["chat_1", "card_1", progress_text("working"), :working]
       ])
       expect(progress_updates.flatten.join).not_to include("private_extension_tool", "secret", "value")
     end
@@ -204,7 +208,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       progress_controller.show_assistant_message("Final result", files: [])
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Running a command...", :working],
+        ["chat_1", "card_1", progress_text("tool.terminal"), :working],
         ["chat_1", "card_1", "Final result", :success]
       ])
       expect(sent).to be_empty
@@ -215,7 +219,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
 
       expect(progress_controller.interrupt_task).to be true
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Task interrupted.", :interrupted]
+        ["chat_1", "card_1", progress_text("task_interrupted"), :interrupted]
       ])
     end
 
@@ -231,7 +235,32 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       )
 
       expect(progress_updates).to eq([
-        ["chat_1", "card_1", "Waiting for your response.", :waiting]
+        ["chat_1", "card_1", progress_text("waiting_response"), :waiting]
+      ])
+      expect(sent).to be_empty
+    end
+
+    it "finalizes the progress card with a localized completion summary" do
+      progress_controller.start_task
+
+      progress_controller.show_complete(iterations: 2, cost: 0.0008, duration: 1.24, cost_source: :pricing)
+
+      expect(progress_updates).to eq([
+        ["chat_1", "card_1", { "zh" => "已完成 · 2 步 · $0.0008 · 1.2s", "en" => "Done · 2 steps · $0.0008 · 1.2s" }, :success]
+      ])
+      expect(sent).to be_empty
+    end
+
+    it "finalizes the progress card with a localized error" do
+      progress_controller.start_task
+
+      progress_controller.show_error("boom", top_up_url: "https://example.com/top-up")
+
+      expect(progress_updates).to eq([
+        ["chat_1", "card_1", {
+          "zh" => "错误：boom\nhttps://example.com/top-up",
+          "en" => "Error: boom\nhttps://example.com/top-up"
+        }, :failed]
       ])
       expect(sent).to be_empty
     end
@@ -382,6 +411,47 @@ RSpec.describe Clacky::Channel::ChannelUIController do
     it "stays silent when ask_user carries no usable question" do
       controller.show_tool_call("ask_user", { "questions" => [] })
       expect(sent).to be_empty
+    end
+
+    context "with an adapter that has interactive question cards" do
+      let(:asked) { [] }
+      let(:card_result) { { message_id: "om_card" } }
+      let(:adapter) do
+        rec = sent
+        calls = asked
+        double("card adapter").tap do |a|
+          allow(a).to receive(:send_text) { |_chat_id, text, _opts| rec << text }
+          allow(a).to receive(:send_questions) do |chat_id, questions, context:, reply_to:|
+            calls << [chat_id, questions, context, reply_to]
+            card_result
+          end
+        end
+      end
+
+      it "asks through the card instead of the markdown fallback" do
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent).to be_empty
+        chat_id, questions, context, reply_to = asked.first
+        expect(chat_id).to eq("chat_1")
+        expect(reply_to).to eq("msg_1")
+        expect(context).to eq("")
+        expect(questions.map { |q| q[:question] }).to eq(["语言选中文还是英文?", "输出格式选 Markdown 还是纯文本?"])
+      end
+
+      it "falls back to text when the card cannot express the questions" do
+        allow(adapter).to receive(:send_questions).and_return(nil)
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent.first).to include("语言选中文还是英文?", "1. 中文")
+      end
+
+      it "falls back to text when sending the card fails" do
+        allow(adapter).to receive(:send_questions).and_raise(StandardError, "boom")
+        controller.show_tool_call("ask_user", ask_args)
+
+        expect(sent.first).to include("语言选中文还是英文?")
+      end
     end
 
     it "still suppresses every other tool" do

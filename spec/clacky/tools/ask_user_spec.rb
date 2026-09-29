@@ -13,6 +13,25 @@ RSpec.describe Clacky::Tools::AskUser do
       expect(list.first[:multi]).to be false
     end
 
+    it "keeps per-question flags given with the shorthand" do
+      list = described_class.normalize_questions(
+        "question" => "Which features?",
+        "description" => "Pick any",
+        "options" => %w[auth billing search],
+        "multi" => true,
+        "allow_free_text" => true,
+        "recommended" => 1
+      )
+
+      expect(list.size).to eq(1)
+      expect(list.first).to include(
+        description: "Pick any",
+        multi: true,
+        allow_free_text: true,
+        recommended: 1
+      )
+    end
+
     it "accepts string keys" do
       list = described_class.normalize_questions("question" => "Which DB?", "options" => ["SQLite"])
 
