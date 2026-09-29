@@ -64,7 +64,7 @@ module Clacky
           }.freeze
           CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_TEXT.keys.freeze
           CARDKIT_SUMMARY_MAX_LENGTH = 50
-          ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex)
+          ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -153,7 +153,7 @@ module Clacky
             end
 
             message_id = response.dig("data", "message_id").to_s
-            session = ProgressCardSession.new(card_id, 1, false, Mutex.new)
+            session = ProgressCardSession.new(card_id, 1, false, Mutex.new, false)
             @progress_cards_mutex.synchronize { @progress_cards[card_id] = session }
 
             { message_id: message_id, progress_id: card_id }
@@ -288,6 +288,7 @@ module Clacky
           end
 
           # Build a CardKit schema 2.0 card with native streaming enabled.
+          # The process panel is inserted later, only once there is process history.
           # @return [String] JSON-encoded card content
           def build_progress_card_payload(text)
             JSON.generate({
@@ -304,28 +305,6 @@ module Clacky
                 elements: [
                   { tag: "markdown", content: "", element_id: CARDKIT_CONTENT_ELEMENT_ID },
                   {
-                    tag: "collapsible_panel",
-                    expanded: false,
-                    header: {
-                      title: { tag: "plain_text", content: "View process" },
-                      icon: {
-                        tag: "standard_icon",
-                        token: "down-small-ccm_outlined",
-                        size: "16px 16px"
-                      },
-                      icon_position: "right",
-                      icon_expanded_angle: -180
-                    },
-                    border: { color: "grey", corner_radius: "5px" },
-                    elements: [
-                      {
-                        tag: "markdown",
-                        content: "",
-                        element_id: CARDKIT_PROCESS_ELEMENT_ID
-                      }
-                    ]
-                  },
-                  {
                     tag: "markdown",
                     content: progress_status_markdown(text),
                     element_id: CARDKIT_STATUS_ELEMENT_ID
@@ -335,12 +314,48 @@ module Clacky
             })
           end
 
-          private def update_progress_card_status(session, text, content: nil, history: nil)
-            if history
-              perform_cardkit_request("replace process history", session.card_id) do
+          private def process_panel_element(history)
+            {
+              tag: "collapsible_panel",
+              expanded: false,
+              header: {
+                title: { tag: "plain_text", content: "View process" },
+                icon: {
+                  tag: "standard_icon",
+                  token: "down-small-ccm_outlined",
+                  size: "16px 16px"
+                },
+                icon_position: "right",
+                icon_expanded_angle: -180
+              },
+              border: { color: "grey", corner_radius: "5px" },
+              elements: [
+                {
+                  tag: "markdown",
+                  content: sanitize_images_for_card(history.to_s),
+                  element_id: CARDKIT_PROCESS_ELEMENT_ID
+                }
+              ]
+            }
+          end
+
+          private def write_process_history(session, action, history)
+            return unless history
+
+            if session.process_panel
+              perform_cardkit_request(action, session.card_id) do
                 replace_card_markdown_element(session, CARDKIT_PROCESS_ELEMENT_ID, history)
               end
+            else
+              response = perform_cardkit_request("insert process panel", session.card_id) do
+                insert_process_panel(session, history)
+              end
+              session.process_panel = response["code"] == 0
             end
+          end
+
+          private def update_progress_card_status(session, text, content: nil, history: nil)
+            write_process_history(session, "replace process history", history)
 
             content_response = if content
               perform_cardkit_request("replace progress content", session.card_id) do
@@ -365,11 +380,7 @@ module Clacky
             safe_text = sanitize_images_for_card(text.to_s)
             status_text = CARDKIT_TERMINAL_STATUS_TEXT.fetch(state.to_sym)
 
-            if history
-              perform_cardkit_request("write final process history", session.card_id) do
-                replace_card_markdown_element(session, CARDKIT_PROCESS_ELEMENT_ID, history)
-              end
-            end
+            write_process_history(session, "write final process history", history)
 
             content_response = perform_cardkit_request("write final progress content", session.card_id) do
               replace_card_markdown_element(session, CARDKIT_CONTENT_ELEMENT_ID, safe_text)
@@ -406,6 +417,20 @@ module Clacky
                 }),
                 sequence: sequence,
                 uuid: "r_#{session.card_id}_#{sequence}"
+              }
+            )
+          end
+
+          private def insert_process_panel(session, history)
+            sequence = next_progress_sequence(session)
+            post(
+              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements",
+              {
+                type: "insert_before",
+                target_element_id: CARDKIT_STATUS_ELEMENT_ID,
+                elements: JSON.generate([process_panel_element(history)]),
+                sequence: sequence,
+                uuid: "i_#{session.card_id}_#{sequence}"
               }
             )
           end

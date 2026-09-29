@@ -91,6 +91,9 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
   end
 
   describe "progress cards" do
+    let(:inserts) { [] }
+    let(:insert_codes) { [] }
+
     before do
       allow(bot).to receive(:post) do |path, payload, params: {}|
         case path
@@ -98,6 +101,9 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
           { "code" => 0, "data" => { "card_id" => "card_progress" } }
         when "/open-apis/im/v1/messages/om_user/reply"
           { "code" => 0, "data" => { "message_id" => "om_progress" } }
+        when "/open-apis/cardkit/v1/cards/card_progress/elements"
+          inserts << payload
+          { "code" => insert_codes.shift || 0 }
         else
           raise "Unexpected POST #{path} payload=#{payload.inspect} params=#{params.inspect}"
         end
@@ -110,16 +116,14 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       expect(bot).to have_received(:post).with("/open-apis/cardkit/v1/cards", satisfy { |payload|
         card = JSON.parse(payload[:data])
         elements = card.dig("body", "elements")
-        process_panel = elements.find { |element| element["tag"] == "collapsible_panel" }
         payload[:type] == "card_json" &&
           card["schema"] == "2.0" &&
           card.dig("config", "streaming_mode") == true &&
           card.dig("config", "summary", "content") == "[Generating...]" &&
+          elements.size == 2 &&
           elements[0]["element_id"] == "content" &&
-          process_panel["expanded"] == false &&
-          process_panel.dig("header", "title", "content") == "View process" &&
-          process_panel.dig("elements", 0, "element_id") == "process_history" &&
-          elements[2]["content"] == "<font color='grey'>Thinking...</font>"
+          elements[1]["element_id"] == "status" &&
+          elements[1]["content"] == "<font color='grey'>Thinking...</font>"
       })
       expect(bot).to have_received(:post).with(
         "/open-apis/im/v1/messages/om_user/reply",
@@ -142,7 +146,7 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       expect(bot.update_progress_card("card_progress", "Working...", state: :working)).to be true
     end
 
-    it "replaces visible narration and updates collapsible process history" do
+    it "inserts the process panel on first history, then replaces its content" do
       bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
       calls = []
       allow(bot).to receive(:put) do |path, payload|
@@ -158,24 +162,69 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
         history: "First step\n\nLatest step"
       )).to be true
 
-      expect(calls.map(&:first)).to eq([
-        "/open-apis/cardkit/v1/cards/card_progress/elements/process_history",
-        "/open-apis/cardkit/v1/cards/card_progress/elements/content",
-        "/open-apis/cardkit/v1/cards/card_progress/elements/status/content"
-      ])
-      process_element = JSON.parse(calls[0][1][:element])
-      content_element = JSON.parse(calls[1][1][:element])
-      expect(process_element).to include(
+      expect(inserts.size).to eq(1)
+      expect(inserts[0]).to include(
+        type: "insert_before",
+        target_element_id: "status",
+        sequence: 2,
+        uuid: "i_card_progress_2"
+      )
+      panel = JSON.parse(inserts[0][:elements]).first
+      expect(panel).to include("tag" => "collapsible_panel", "expanded" => false)
+      expect(panel.dig("header", "title", "content")).to eq("View process")
+      expect(panel.dig("elements", 0)).to include(
         "element_id" => "process_history",
         "content" => "First step\n\nLatest step"
       )
+      expect(calls.map(&:first)).to eq([
+        "/open-apis/cardkit/v1/cards/card_progress/elements/content",
+        "/open-apis/cardkit/v1/cards/card_progress/elements/status/content"
+      ])
+      content_element = JSON.parse(calls[0][1][:element])
       expect(content_element).to include(
         "element_id" => "content",
         "content" => "Latest step"
       )
-      expect(calls[2][1]).to include(
+      expect(calls[1][1]).to include(
         content: "<font color='grey'>Working...</font>"
       )
+
+      calls.clear
+      bot.update_progress_card("card_progress", "Working...", state: :working, history: "First step\n\nNext step")
+
+      expect(inserts.size).to eq(1)
+      expect(calls[0][0]).to eq("/open-apis/cardkit/v1/cards/card_progress/elements/process_history")
+      expect(JSON.parse(calls[0][1][:element])).to include(
+        "element_id" => "process_history",
+        "content" => "First step\n\nNext step"
+      )
+    end
+
+    it "retries inserting the process panel after a failed insert" do
+      insert_codes << 230001
+      bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
+      paths = []
+      allow(bot).to receive(:put) do |path, _payload|
+        paths << path
+        { "code" => 0 }
+      end
+
+      bot.update_progress_card("card_progress", "Working...", state: :working, history: "Step 1")
+      bot.update_progress_card("card_progress", "Working...", state: :working, history: "Step 2")
+
+      expect(inserts.size).to eq(2)
+      expect(JSON.parse(inserts[1][:elements]).first.dig("elements", 0, "content")).to eq("Step 2")
+      expect(paths).not_to include("/open-apis/cardkit/v1/cards/card_progress/elements/process_history")
+    end
+
+    it "inserts the process panel when history first arrives at finalize" do
+      bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
+      allow(bot).to receive(:put).and_return("code" => 0)
+      allow(bot).to receive(:patch).and_return("code" => 0)
+
+      expect(bot.update_progress_card("card_progress", "Finished", state: :success, history: "Only step")).to be true
+      expect(inserts.size).to eq(1)
+      expect(JSON.parse(inserts[0][:elements]).first.dig("elements", 0, "content")).to eq("Only step")
     end
 
     it "writes final content, marks the status done, and closes streaming mode" do
@@ -195,6 +244,7 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       end
 
       expect(bot.update_progress_card("card_progress", "Finished", state: :success)).to be true
+      expect(inserts).to be_empty
       expect(calls.size).to eq(2)
       expect(calls[0][0]).to eq(
         "/open-apis/cardkit/v1/cards/card_progress/elements/content"
