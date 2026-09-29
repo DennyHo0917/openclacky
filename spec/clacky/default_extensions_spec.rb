@@ -8,7 +8,10 @@ RSpec.describe "ApiExtensionLoader built-in extensions" do
   it "loads the meeting extension from default_extensions" do
     empty_dir = Dir.mktmpdir
     begin
-      allow(Clacky::ExtensionLoader).to receive(:disabled_ids).and_return(Set.new)
+      # meeting ships with `enabled_by_default: false`, so it only loads once
+      # the user flips it on in state.json. Stub the switch state rather than
+      # letting the machine's own ~/.clacky/ext/state.json decide.
+      allow(Clacky::ExtensionLoader).to receive(:ext_switch_state).and_return({ "meeting" => true })
       allow(Clacky::ExtensionLoader).to receive(:load_all).and_wrap_original do |m, **kwargs|
         default_layers = Clacky::ExtensionLoader.default_layers
         m.call(**kwargs.merge(layers: default_layers.merge(local: empty_dir), force: true))
@@ -42,7 +45,7 @@ RSpec.describe "ApiExtensionLoader built-in extensions" do
         end
       RUBY
 
-      allow(Clacky::ExtensionLoader).to receive(:disabled_ids).and_return(Set.new)
+      allow(Clacky::ExtensionLoader).to receive(:ext_switch_state).and_return({ "meeting" => true })
       allow(Clacky::ExtensionLoader).to receive(:load_all).and_wrap_original do |m, **kwargs|
         default_layers = Clacky::ExtensionLoader.default_layers
         m.call(**kwargs.merge(layers: default_layers.merge(local: user_dir), force: true))
