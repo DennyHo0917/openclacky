@@ -417,6 +417,68 @@ RSpec.describe Clacky::AgentConfig do
       config = described_class.new(models: [])
       expect(config.model_names).to eq([])
     end
+
+    it "skips sidecar and auto-injected entries" do
+      config = described_class.new(
+        models: [
+          { "model" => "claude-sonnet-4" },
+          { "type" => "stt", "mode" => "auto" },
+          { "model" => "gpt-image-1", "type" => "image", "mode" => "custom" },
+          { "model" => "lite-model", "type" => "lite", "auto_injected" => true },
+          { "model" => "gpt-4", "type" => "default" }
+        ]
+      )
+
+      expect(config.model_names).to eq(["claude-sonnet-4", "gpt-4"])
+    end
+  end
+
+  describe "#chat_models" do
+    it "keeps only entries the user can chat with" do
+      config = described_class.new(
+        models: [
+          { "model" => "claude-sonnet-4" },
+          { "type" => "video_understanding", "mode" => "auto" },
+          { "type" => "image", "mode" => "off" },
+          { "type" => "ocr", "disabled" => true },
+          { "model" => "explicit-lite", "type" => "lite" },
+          { "model" => "gpt-4", "type" => "default" }
+        ]
+      )
+
+      expect(config.chat_models.map { |m| m["model"] })
+        .to eq(["claude-sonnet-4", "explicit-lite", "gpt-4"])
+    end
+
+    it "returns empty array when every entry is a sidecar" do
+      config = described_class.new(
+        models: [{ "type" => "stt", "mode" => "auto" }, { "type" => "ocr", "mode" => "off" }]
+      )
+
+      expect(config.chat_models).to eq([])
+    end
+  end
+
+  describe ".chat_model?" do
+    it "accepts plain, default and explicitly configured lite entries" do
+      expect(described_class.chat_model?({ "model" => "a" })).to be true
+      expect(described_class.chat_model?({ "model" => "a", "type" => "default" })).to be true
+      expect(described_class.chat_model?({ "model" => "a", "type" => "lite" })).to be true
+    end
+
+    it "rejects every sidecar kind" do
+      Clacky::Providers::SIDECAR_KINDS.each do |kind|
+        expect(described_class.chat_model?({ "type" => kind })).to be(false), "expected #{kind} to be rejected"
+      end
+    end
+
+    it "rejects auto-injected entries even when they look like chat models" do
+      expect(described_class.chat_model?({ "model" => "a", "auto_injected" => true })).to be false
+    end
+
+    it "returns false for nil" do
+      expect(described_class.chat_model?(nil)).to be false
+    end
   end
 
   describe "#api_key" do

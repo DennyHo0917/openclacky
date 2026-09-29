@@ -6353,15 +6353,9 @@ module Clacky
             type:              m["type"]
           }
         end
-        # Filter out auto-injected models (lite, derived media) AND media
-        # entries (image/video/audio/ocr) — those are managed via the dedicated
-        # media-config UI, not the chat-model card list.
-        models.reject! do |m|
-          raw = @agent_config.models[m[:index]]
-          raw["auto_injected"] ||
-            Clacky::Providers::MEDIA_KINDS.include?(raw["type"].to_s) ||
-            raw["type"].to_s == "ocr"
-        end
+        # Sidecar capability configs (media/ocr) and auto-injected entries are
+        # managed by the dedicated media UI, not the chat-model card list.
+        models.select! { |m| Clacky::AgentConfig.chat_model?(@agent_config.models[m[:index]]) }
         # Capabilities follow the model the *session* is actually running on
         # (it may differ from the global default after a per-session switch).
         query   = URI.decode_www_form(req.query_string.to_s).to_h

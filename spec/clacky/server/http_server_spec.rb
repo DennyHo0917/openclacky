@@ -729,6 +729,21 @@ RSpec.describe Clacky::Server::HttpServer do
         expect(m["provider_name_key"]).to be_nil
       end
     end
+
+    it "hides sidecar capability entries from the chat model list" do
+      agent_config.models << { "id" => "id-stt", "type" => "stt", "mode" => "auto" }
+      agent_config.models << { "id" => "id-img", "model" => "gpt-image-1", "type" => "image" }
+      agent_config.models << { "id" => "id-chat", "model" => "second-model" }
+
+      with_server(agent_config: agent_config) do |server|
+        req = fake_req(method: "GET", path: "/api/config")
+        res = fake_res
+        dispatch(server, req, res)
+
+        expect(parsed_body(res)["models"].map { |m| m["model"] })
+          .to eq(["test-model", "second-model"])
+      end
+    end
   end
 
   # ── Single-item model CRUD APIs ───────────────────────────────────────────
