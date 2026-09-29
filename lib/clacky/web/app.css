@@ -5221,8 +5221,9 @@ body {
   vertical-align: middle;
 }
 .msg-pdf-badge-icon {
-  font-size: 1.25rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 .msg-pdf-badge-info {
@@ -6204,8 +6205,8 @@ body {
   border-top: none;
 }
 
-/* Square off the top corners of the input-bar when the skill dropdown sits above it */
-#input-area:has(#skill-autocomplete:not([style*="display:none"])):not(:has(#skill-autocomplete[style*="display: none"])) #input-bar {
+/* Square off the top corners of the composer card when the skill dropdown sits above it */
+#input-area:has(#skill-autocomplete:not([style*="display:none"])):not(:has(#skill-autocomplete[style*="display: none"])) #input-card {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
@@ -6229,29 +6230,20 @@ body {
   outline-offset: -2px;
 }
 
-/* Image preview strip — visually merged into the input-bar card above the textarea */
+/* Attachment strip — top part of the composer card, above the input row */
 #image-preview-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-primary);
-  border-bottom: none;
-  border-radius: 13px 13px 0 0;
-  box-shadow: var(--shadow-card);
-  margin-bottom: -1px;
+  padding: 0.625rem 0.75rem 0.5rem;
+  /* Divider to the input row — the strip is display:none when no chips exist. */
+  border-bottom: 1px solid var(--color-border-primary);
 }
 #ns-image-preview-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.25rem 0 0.5rem;
-}
-/* Square off the top corners of the input-bar when the preview strip sits above it */
-#input-area:has(#image-preview-strip:not([style*="display:none"])):not(:has(#image-preview-strip[style*="display: none"])) #input-bar {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
 }
 .img-preview-item {
   position: relative;
@@ -6303,8 +6295,9 @@ body {
   box-sizing: border-box;
 }
 .pdf-preview-icon {
-  font-size: 1.5rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 .pdf-preview-info {
@@ -6576,21 +6569,28 @@ body {
   cursor: default;
 }
 
-/* ── Input bar ───────────────────────────────────────────────────────────── */
-#input-bar {
-  margin: 0;
-  padding: 10px 12px;
+/* ── Composer card ───────────────────────────────────────────────────────── */
+/* Attachment chips and the input row live inside one card, so the accent border
+   on focus wraps the whole composer instead of only the text row. */
+#input-card {
   border: 1px solid var(--color-border-primary);
   border-radius: 13px;
   background: var(--color-bg-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
   box-shadow: var(--shadow-card);
   transition: border-color .14s;
 }
-#input-bar:focus-within {
+#input-card:focus-within {
   border-color: color-mix(in srgb, var(--color-accent-primary) 50%, var(--color-border-primary));
+}
+
+/* ── Input bar ───────────────────────────────────────────────────────────── */
+/* Layout only — the card above draws the frame. */
+#input-bar {
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Attach button — left of textarea, vertically centered */
