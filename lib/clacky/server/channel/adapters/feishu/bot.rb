@@ -56,13 +56,8 @@ module Clacky
           CARDKIT_CONTENT_ELEMENT_ID = "content"
           CARDKIT_PROCESS_ELEMENT_ID = "process_history"
           CARDKIT_STATUS_ELEMENT_ID = "status"
-          CARDKIT_TERMINAL_STATUS_TEXT = {
-            waiting: "Waiting for input",
-            success: "Done",
-            failed: "Failed",
-            interrupted: "Stopped"
-          }.freeze
-          CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_TEXT.keys.freeze
+          CARDKIT_TERMINAL_STATES = %i[waiting success failed interrupted].freeze
+          CARDKIT_LOCALE_CODES = { "zh" => "zh_cn", "en" => "en_us" }.freeze
           CARDKIT_SUMMARY_MAX_LENGTH = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
 
@@ -295,7 +290,7 @@ module Clacky
               schema: "2.0",
               config: {
                 streaming_mode: true,
-                summary: { content: "[Generating...]" },
+                summary: localized_card_text(Clacky::I18n.translations("channel.progress.generating")) { |t| t },
                 streaming_config: {
                   print_frequency_ms: { default: 50 },
                   print_step: { default: 1 }
@@ -303,12 +298,8 @@ module Clacky
               },
               body: {
                 elements: [
-                  { tag: "markdown", content: "", element_id: CARDKIT_CONTENT_ELEMENT_ID },
-                  {
-                    tag: "markdown",
-                    content: progress_status_markdown(text),
-                    element_id: CARDKIT_STATUS_ELEMENT_ID
-                  }
+                  content_element(""),
+                  status_element(text)
                 ]
               }
             })
@@ -319,7 +310,11 @@ module Clacky
               tag: "collapsible_panel",
               expanded: false,
               header: {
-                title: { tag: "plain_text", content: "View process", text_color: "grey", text_size: "notation" },
+                title: {
+                  tag: "plain_text",
+                  text_color: "grey",
+                  text_size: "notation"
+                }.merge(localized_card_text(Clacky::I18n.translations("channel.progress.view_process")) { |t| t }),
                 vertical_align: "center",
                 icon: {
                   tag: "standard_icon",
@@ -333,14 +328,37 @@ module Clacky
               border: { color: "grey", corner_radius: "5px" },
               vertical_spacing: "8px",
               padding: "8px 8px 8px 8px",
-              elements: [
-                {
-                  tag: "markdown",
-                  content: sanitize_images_for_card(history.to_s),
-                  text_size: "notation",
-                  element_id: CARDKIT_PROCESS_ELEMENT_ID
-                }
-              ]
+              elements: [process_history_element(history)]
+            }
+          end
+
+          private def process_history_element(history)
+            {
+              tag: "markdown",
+              content: sanitize_images_for_card(history.to_s),
+              text_size: "notation",
+              element_id: CARDKIT_PROCESS_ELEMENT_ID
+            }
+          end
+
+          private def content_element(text)
+            { tag: "markdown", element_id: CARDKIT_CONTENT_ELEMENT_ID }
+              .merge(localized_card_text(text) { |t| sanitize_images_for_card(t) })
+          end
+
+          private def status_element(text)
+            { tag: "markdown", element_id: CARDKIT_STATUS_ELEMENT_ID }
+              .merge(localized_card_text(text) { |t| progress_status_markdown(t) })
+          end
+
+          # Text is a String, or a { locale => String } Hash rendered through
+          # Feishu per-component i18n so each viewer sees their client language.
+          private def localized_card_text(text)
+            return { content: yield(text.to_s) } unless text.is_a?(Hash)
+
+            {
+              content: yield(text.fetch(Clacky::I18n::DEFAULT_LOCALE)),
+              i18n_content: text.map { |code, value| [CARDKIT_LOCALE_CODES.fetch(code), yield(value)] }.to_h
             }
           end
 
@@ -349,7 +367,7 @@ module Clacky
 
             if session.process_panel
               perform_cardkit_request(action, session.card_id) do
-                replace_card_markdown_element(session, CARDKIT_PROCESS_ELEMENT_ID, history)
+                replace_card_element(session, process_history_element(history))
               end
             else
               response = perform_cardkit_request("insert process panel", session.card_id) do
@@ -364,16 +382,12 @@ module Clacky
 
             content_response = if content
               perform_cardkit_request("replace progress content", session.card_id) do
-                replace_card_markdown_element(session, CARDKIT_CONTENT_ELEMENT_ID, content)
+                replace_card_element(session, content_element(content))
               end
             end
 
             status_response = perform_cardkit_request("update progress status", session.card_id) do
-              put_card_element_content(
-                session,
-                CARDKIT_STATUS_ELEMENT_ID,
-                progress_status_markdown(text)
-              )
+              replace_card_element(session, status_element(text))
             end
             # The visible body is the primary delivery when narration is
             # present. A footer failure must not trigger a duplicate fallback
@@ -382,25 +396,20 @@ module Clacky
           end
 
           private def finalize_progress_card(session, text, state, history: nil)
-            safe_text = sanitize_images_for_card(text.to_s)
-            status_text = CARDKIT_TERMINAL_STATUS_TEXT.fetch(state.to_sym)
+            status_text = Clacky::I18n.translations("channel.progress.status.#{state}")
 
             write_process_history(session, "write final process history", history)
 
             content_response = perform_cardkit_request("write final progress content", session.card_id) do
-              replace_card_markdown_element(session, CARDKIT_CONTENT_ELEMENT_ID, safe_text)
+              replace_card_element(session, content_element(text))
             end
 
             perform_cardkit_request("write final progress status", session.card_id) do
-              put_card_element_content(
-                session,
-                CARDKIT_STATUS_ELEMENT_ID,
-                progress_status_markdown(status_text)
-              )
+              replace_card_element(session, status_element(status_text))
             end
 
             perform_cardkit_request("close progress card", session.card_id) do
-              close_progress_card(session, safe_text)
+              close_progress_card(session, text)
             end
 
             session.closed = true
@@ -409,17 +418,12 @@ module Clacky
             content_response["code"] == 0
           end
 
-          private def replace_card_markdown_element(session, element_id, content)
-            safe_content = sanitize_images_for_card(content.to_s)
+          private def replace_card_element(session, element)
             sequence = next_progress_sequence(session)
             put(
-              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element_id}",
+              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element.fetch(:element_id)}",
               {
-                element: JSON.generate({
-                  tag: "markdown",
-                  content: safe_content,
-                  element_id: element_id
-                }),
+                element: JSON.generate(element),
                 sequence: sequence,
                 uuid: "r_#{session.card_id}_#{sequence}"
               }
@@ -440,25 +444,13 @@ module Clacky
             )
           end
 
-          private def put_card_element_content(session, element_id, content)
-            sequence = next_progress_sequence(session)
-            put(
-              "/open-apis/cardkit/v1/cards/#{session.card_id}/elements/#{element_id}/content",
-              {
-                content: content,
-                sequence: sequence,
-                uuid: "u_#{session.card_id}_#{sequence}"
-              }
-            )
-          end
-
           private def close_progress_card(session, text)
             sequence = next_progress_sequence(session)
             patch("/open-apis/cardkit/v1/cards/#{session.card_id}/settings", {
               settings: JSON.generate({
                 config: {
                   streaming_mode: false,
-                  summary: { content: truncate_cardkit_summary(text) }
+                  summary: localized_card_text(text) { |t| truncate_cardkit_summary(sanitize_images_for_card(t)) }
                 }
               }),
               sequence: sequence,

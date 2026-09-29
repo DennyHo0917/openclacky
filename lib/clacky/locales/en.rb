@@ -42,7 +42,31 @@ module Clacky
       "platform.error.device_token_expired" => "This device's authorization has expired. Please re-authorize before publishing.",
       "platform.error.owner_user_not_found" => "No account found for this device. Please re-authorize it.",
       "platform.error.generic"              => "Request failed (HTTP %<code>s). Please contact support.",
-      "platform.error.generic_with_code"    => "Request failed (HTTP %<code>s, code: %<error_code>s). Please contact support."
+      "platform.error.generic_with_code"    => "Request failed (HTTP %<code>s, code: %<error_code>s). Please contact support.",
+      "channel.progress.thinking"              => "Thinking...",
+      "channel.progress.working"               => "Working...",
+      "channel.progress.tool.browser"          => "Using the browser...",
+      "channel.progress.tool.edit"             => "Editing a file...",
+      "channel.progress.tool.file_reader"      => "Reading a file...",
+      "channel.progress.tool.glob"             => "Finding files...",
+      "channel.progress.tool.grep"             => "Searching files...",
+      "channel.progress.tool.invoke_skill"     => "Using a skill...",
+      "channel.progress.tool.terminal"         => "Running a command...",
+      "channel.progress.tool.todo_manager"     => "Updating the task plan...",
+      "channel.progress.tool.web_fetch"        => "Reading a web page...",
+      "channel.progress.tool.web_search"       => "Searching the web...",
+      "channel.progress.tool.write"            => "Writing a file...",
+      "channel.progress.task_interrupted"      => "Task interrupted.",
+      "channel.progress.waiting_response"      => "Waiting for your response.",
+      "channel.progress.step"                  => "%<count>d step",
+      "channel.progress.steps"                 => "%<count>d steps",
+      "channel.progress.error"                 => "Error: %<message>s",
+      "channel.progress.view_process"          => "View process",
+      "channel.progress.generating"            => "[Generating...]",
+      "channel.progress.status.waiting"        => "Waiting for input",
+      "channel.progress.status.success"        => "Done",
+      "channel.progress.status.failed"         => "Failed",
+      "channel.progress.status.interrupted"    => "Stopped"
     }.freeze
   end
 end

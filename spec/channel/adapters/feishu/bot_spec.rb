@@ -111,7 +111,7 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
     end
 
     it "creates a native streaming CardKit card and replies with its card reference" do
-      result = bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
+      result = bot.send_progress_card("oc_chat", { "zh" => "思考中...", "en" => "Thinking..." }, reply_to: "om_user")
 
       expect(bot).to have_received(:post).with("/open-apis/cardkit/v1/cards", satisfy { |payload|
         card = JSON.parse(payload[:data])
@@ -119,11 +119,21 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
         payload[:type] == "card_json" &&
           card["schema"] == "2.0" &&
           card.dig("config", "streaming_mode") == true &&
-          card.dig("config", "summary", "content") == "[Generating...]" &&
+          card.dig("config", "summary") == {
+            "content" => "[Generating...]",
+            "i18n_content" => { "zh_cn" => "[生成中...]", "en_us" => "[Generating...]" }
+          } &&
           elements.size == 2 &&
           elements[0]["element_id"] == "content" &&
-          elements[1]["element_id"] == "status" &&
-          elements[1]["content"] == "<font color='grey'>Thinking...</font>"
+          elements[1] == {
+            "tag" => "markdown",
+            "element_id" => "status",
+            "content" => "<font color='grey'>Thinking...</font>",
+            "i18n_content" => {
+              "zh_cn" => "<font color='grey'>思考中...</font>",
+              "en_us" => "<font color='grey'>Thinking...</font>"
+            }
+          }
       })
       expect(bot).to have_received(:post).with(
         "/open-apis/im/v1/messages/om_user/reply",
@@ -136,14 +146,39 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       expect(result).to eq(message_id: "om_progress", progress_id: "card_progress")
     end
 
-    it "updates the status element for a working task" do
+    it "replaces the status element with a plain status string" do
       bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
-      expect(bot).to receive(:put).with(
-        "/open-apis/cardkit/v1/cards/card_progress/elements/status/content",
-        hash_including(content: "<font color='grey'>Working...</font>", sequence: 2)
-      ).and_return("code" => 0)
+      expect(bot).to receive(:put) do |path, payload|
+        expect(path).to eq("/open-apis/cardkit/v1/cards/card_progress/elements/status")
+        expect(payload).to include(sequence: 2, uuid: "r_card_progress_2")
+        expect(JSON.parse(payload[:element])).to eq(
+          "tag" => "markdown",
+          "element_id" => "status",
+          "content" => "<font color='grey'>$ ls</font>"
+        )
+        { "code" => 0 }
+      end
 
-      expect(bot.update_progress_card("card_progress", "Working...", state: :working)).to be true
+      expect(bot.update_progress_card("card_progress", "$ ls", state: :working)).to be true
+    end
+
+    it "replaces the status element with localized status text" do
+      bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
+      status_element = nil
+      allow(bot).to receive(:put) do |_path, payload|
+        status_element = JSON.parse(payload[:element])
+        { "code" => 0 }
+      end
+
+      bot.update_progress_card("card_progress", { "zh" => "处理中...", "en" => "Working..." }, state: :working)
+
+      expect(status_element).to include(
+        "content" => "<font color='grey'>Working...</font>",
+        "i18n_content" => {
+          "zh_cn" => "<font color='grey'>处理中...</font>",
+          "en_us" => "<font color='grey'>Working...</font>"
+        }
+      )
     end
 
     it "inserts the process panel on first history, then replaces its content" do
@@ -172,7 +207,11 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       panel = JSON.parse(inserts[0][:elements]).first
       expect(panel).to include("tag" => "collapsible_panel", "expanded" => false)
       expect(panel.dig("header", "title")).to eq(
-        "tag" => "plain_text", "content" => "View process", "text_color" => "grey", "text_size" => "notation"
+        "tag" => "plain_text",
+        "text_color" => "grey",
+        "text_size" => "notation",
+        "content" => "View process",
+        "i18n_content" => { "zh_cn" => "查看过程", "en_us" => "View process" }
       )
       expect(panel.dig("header", "icon", "color")).to eq("grey")
       expect(panel.dig("border", "color")).to eq("grey")
@@ -183,15 +222,15 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       )
       expect(calls.map(&:first)).to eq([
         "/open-apis/cardkit/v1/cards/card_progress/elements/content",
-        "/open-apis/cardkit/v1/cards/card_progress/elements/status/content"
+        "/open-apis/cardkit/v1/cards/card_progress/elements/status"
       ])
       content_element = JSON.parse(calls[0][1][:element])
       expect(content_element).to include(
         "element_id" => "content",
         "content" => "Latest step"
       )
-      expect(calls[1][1]).to include(
-        content: "<font color='grey'>Working...</font>"
+      expect(JSON.parse(calls[1][1][:element])).to include(
+        "content" => "<font color='grey'>Working...</font>"
       )
 
       calls.clear
@@ -199,8 +238,10 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
 
       expect(inserts.size).to eq(1)
       expect(calls[0][0]).to eq("/open-apis/cardkit/v1/cards/card_progress/elements/process_history")
-      expect(JSON.parse(calls[0][1][:element])).to include(
+      expect(JSON.parse(calls[0][1][:element])).to eq(
+        "tag" => "markdown",
         "element_id" => "process_history",
+        "text_size" => "notation",
         "content" => "First step\n\nNext step"
       )
     end
@@ -263,11 +304,43 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
         "content" => "Finished"
       )
       expect(calls[1][0]).to eq(
-        "/open-apis/cardkit/v1/cards/card_progress/elements/status/content"
+        "/open-apis/cardkit/v1/cards/card_progress/elements/status"
       )
-      expect(calls[1][1]).to include(
-        content: "<font color='grey'>Done</font>",
-        sequence: 3
+      expect(calls[1][1]).to include(sequence: 3)
+      expect(JSON.parse(calls[1][1][:element])).to include(
+        "content" => "<font color='grey'>Done</font>",
+        "i18n_content" => {
+          "zh_cn" => "<font color='grey'>已完成</font>",
+          "en_us" => "<font color='grey'>Done</font>"
+        }
+      )
+    end
+
+    it "localizes the final content and summary when given translations" do
+      bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
+      content_element = nil
+      allow(bot).to receive(:put) do |path, payload|
+        content_element = JSON.parse(payload[:element]) if path.end_with?("/elements/content")
+        { "code" => 0 }
+      end
+      summary = nil
+      allow(bot).to receive(:patch) do |_path, payload|
+        summary = JSON.parse(payload[:settings]).dig("config", "summary")
+        { "code" => 0 }
+      end
+
+      expect(bot.update_progress_card(
+        "card_progress",
+        { "zh" => "任务已中断。", "en" => "Task interrupted." },
+        state: :interrupted
+      )).to be true
+      expect(content_element).to include(
+        "content" => "Task interrupted.",
+        "i18n_content" => { "zh_cn" => "任务已中断。", "en_us" => "Task interrupted." }
+      )
+      expect(summary).to eq(
+        "content" => "Task interrupted.",
+        "i18n_content" => { "zh_cn" => "任务已中断。", "en_us" => "Task interrupted." }
       )
     end
 
@@ -287,21 +360,24 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
     end
 
     {
-      failed: "Failed",
-      interrupted: "Stopped",
-      waiting: "Waiting for input"
-    }.each do |state, label|
+      failed: ["Failed", "失败"],
+      interrupted: ["Stopped", "已停止"],
+      waiting: ["Waiting for input", "等待输入"]
+    }.each do |state, (label, zh_label)|
       it "marks a #{state} task as #{label}" do
         bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
-        status_content = nil
+        status_element = nil
         allow(bot).to receive(:put) do |path, payload|
-          status_content = payload[:content] if path.include?("/elements/status/content")
+          status_element = JSON.parse(payload[:element]) if path.end_with?("/elements/status")
           { "code" => 0 }
         end
         allow(bot).to receive(:patch).and_return("code" => 0)
 
         expect(bot.update_progress_card("card_progress", "Result", state: state)).to be true
-        expect(status_content).to eq("<font color='grey'>#{label}</font>")
+        expect(status_element["i18n_content"]).to eq(
+          "zh_cn" => "<font color='grey'>#{zh_label}</font>",
+          "en_us" => "<font color='grey'>#{label}</font>"
+        )
       end
     end
   end
