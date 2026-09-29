@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require "yaml"
+require "json"
+require "time"
+require "securerandom"
 require "fileutils"
 
 module Clacky
@@ -22,6 +25,8 @@ module Clacky
     class Scheduler
       SCHEDULES_FILE = File.expand_path("~/.clacky/schedules.yml")
       TASKS_DIR      = File.expand_path("~/.clacky/tasks")
+      RUNS_FILE      = File.expand_path("~/.clacky/cron_runs.json")
+      MAX_RUNS       = 500
 
       def initialize(session_registry:, session_builder:, task_runner:)
         @registry        = session_registry
@@ -33,6 +38,7 @@ module Clacky
         @thread          = nil
         @running         = false
         @mutex           = Mutex.new
+        @runs_mutex      = Mutex.new
       end
 
       # Start the background scheduler thread.
@@ -40,6 +46,8 @@ module Clacky
         @mutex.synchronize do
           return if @running
 
+          # A run still marked running here was cut off by a previous process exit.
+          mark_stale_runs_interrupted
           @running = true
           @thread  = Clacky::ThreadRegistry.spawn(name: "clacky-scheduler") { run_loop }
         end
@@ -138,9 +146,114 @@ module Clacky
             "content" => content,
             "cron"    => schedule["cron"],
             "enabled" => schedule.fetch("enabled", true),
-            "scheduled" => !schedule.empty?
+            "scheduled" => !schedule.empty?,
+            "last_run" => last_runs[task_name]
           }
         end
+      end
+
+      # ── Run history ──────────────────────────────────────────────────────────
+
+      # Newest-first run records, optionally narrowed to one task and/or a
+      # case-insensitive substring of the task name or error text.
+      def list_runs(task: nil, q: nil, limit: 200)
+        runs = load_runs.reverse
+        runs = runs.select { |r| r["task"] == task } if task && !task.empty?
+        if q && !q.strip.empty?
+          needle = q.strip.downcase
+          runs = runs.select do |r|
+            r["task"].to_s.downcase.include?(needle) || r["error"].to_s.downcase.include?(needle)
+          end
+        end
+        runs.first(limit)
+      end
+
+      # Record a run around the block, finishing it as success / interrupted /
+      # error depending on how the block exits. Re-raises so the caller's own
+      # error handling still sees the failure.
+      def track_run(task_name, session_id, trigger:)
+        run_id = start_run(task_name, session_id, trigger: trigger)
+        result = yield
+        finish_run(run_id, "success")
+        result
+      rescue Clacky::AgentInterrupted
+        finish_run(run_id, "interrupted")
+        raise
+      rescue => e
+        finish_run(run_id, "error", error: e.message)
+        raise
+      end
+
+      def start_run(task_name, session_id, trigger:)
+        run = {
+          "id"          => SecureRandom.hex(6),
+          "task"        => task_name,
+          "session_id"  => session_id,
+          "trigger"     => trigger.to_s,
+          "status"      => "running",
+          "started_at"  => Time.now.iso8601,
+          "finished_at" => nil,
+          "error"       => nil
+        }
+        mutate_runs { |runs| runs << run }
+        run["id"]
+      end
+
+      def finish_run(run_id, status, error: nil)
+        return unless run_id
+
+        mutate_runs do |runs|
+          run = runs.find { |r| r["id"] == run_id }
+          next unless run
+
+          run["status"]      = status
+          run["finished_at"] = Time.now.iso8601
+          run["error"]       = error
+        end
+      end
+
+      def delete_run(run_id)
+        removed = false
+        mutate_runs { |runs| removed = !runs.reject! { |r| r["id"] == run_id }.nil? }
+        removed
+      end
+
+      private def last_runs
+        load_runs.each_with_object({}) do |r, h|
+          h[r["task"]] = r.slice("status", "started_at", "finished_at")
+        end
+      end
+
+      private def mark_stale_runs_interrupted
+        mutate_runs do |runs|
+          runs.each do |r|
+            next unless r["status"] == "running"
+
+            r["status"]      = "interrupted"
+            r["finished_at"] ||= Time.now.iso8601
+          end
+        end
+      rescue => e
+        Clacky::Logger.error("scheduler_runs_recover_error", error: e)
+      end
+
+      private def mutate_runs
+        @runs_mutex.synchronize do
+          runs = load_runs
+          yield runs
+          runs = runs.last(MAX_RUNS)
+          FileUtils.mkdir_p(File.dirname(RUNS_FILE))
+          File.write(RUNS_FILE, JSON.generate(runs))
+        end
+      end
+
+      private def load_runs
+        return [] unless File.exist?(RUNS_FILE)
+
+        data = JSON.parse(File.read(RUNS_FILE))
+        data.is_a?(Array) ? data.select { |r| r.is_a?(Hash) } : []
+      rescue JSON::ParserError
+        []
       end
 
       # ── Task file helpers ────────────────────────────────────────────────────
@@ -242,7 +355,9 @@ module Clacky
         #   * broadcasting session_update
         #   * persisting the session JSON on success/interrupted/error   ← the bit we were missing
         #   * idle-compression timer lifecycle
-        @task_runner.call(session_id, agent) { agent.run(prompt) }
+        @task_runner.call(session_id, agent) do
+          track_run(task_name, session_id, trigger: :schedule) { agent.run(prompt) }
+        end
 
         Clacky::Logger.info("scheduler_task_dispatched", task: task_name, session: session_id)
       rescue => e

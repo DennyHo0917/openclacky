@@ -446,7 +446,7 @@
       <div id="task-detail-body">
         <!-- Title and Description -->
         <div class="task-page-header">
-          <h2 class="task-page-title" data-i18n="tasks.title">Scheduled Tasks</h2>
+          <h2 class="task-page-title page-title" data-i18n="tasks.title">Scheduled Tasks</h2>
           <p class="task-page-subtitle" data-i18n="tasks.subtitle">Manage and schedule automated tasks for your assistant</p>
           <button id="btn-create-task" class="btn-create-task" title="Create a new task">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm">
@@ -456,8 +456,20 @@
             <span data-i18n="tasks.btn.create">Create Task</span>
           </button>
         </div>
-        
+
+        <div id="tasks-tabs" class="page-tabs">
+          <div class="tasks-tabs-left">
+            <button class="tasks-tab page-tab active" data-tab="tasks" data-i18n="tasks.tab.tasks">Scheduled</button>
+            <button class="tasks-tab page-tab" data-tab="runs" data-i18n="tasks.tab.runs">Run History</button>
+          </div>
+          <div class="tasks-search-box">
+            <svg class="tasks-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="tasks-search-input" class="tasks-search" placeholder="Search tasks or runs…" data-i18n-placeholder="tasks.search.placeholder" />
+          </div>
+        </div>
+
         <div id="task-list-table"></div>
+        <div id="task-runs-table" style="display:none"></div>
       </div>
     </div>
 
@@ -619,7 +631,7 @@
       <div id="skills-body">
         <!-- Title and Description -->
         <div class="skills-page-header">
-          <h2 class="skills-page-title" data-i18n="skills.title">Skills</h2>
+          <h2 class="skills-page-title page-title" data-i18n="skills.title">Skills</h2>
           <p class="skills-page-subtitle" data-i18n="skills.subtitle">Extend your assistant's capabilities with custom skills</p>
           <div class="skill-action-btns">
             <button id="btn-import-skill" class="btn-import-skill" title="Import skill from ZIP or GitHub URL">
@@ -641,10 +653,10 @@
         </div>
 
         <!-- Tab bar with controls -->
-        <div id="skills-tabs">
+        <div id="skills-tabs" class="page-tabs">
           <div class="skills-tabs-left">
-            <button class="skills-tab active" data-tab="my-skills" id="tab-my-skills" data-i18n="skills.tab.my">My Skills</button>
-            <button class="skills-tab" data-tab="brand-skills" id="tab-brand-skills" data-i18n="skills.tab.brand">Brand Skills</button>
+            <button class="skills-tab page-tab active" data-tab="my-skills" id="tab-my-skills" data-i18n="skills.tab.my">My Skills</button>
+            <button class="skills-tab page-tab" data-tab="brand-skills" id="tab-brand-skills" data-i18n="skills.tab.brand">Brand Skills</button>
           </div>
           <div class="skills-tabs-controls">
             <!-- Search input -->
@@ -712,7 +724,7 @@
     <div id="channels-panel" style="display:none">
       <div id="channels-body">
         <div class="channels-page-header">
-          <h2 class="channels-page-title" data-i18n="channels.title">Channels</h2>
+          <h2 class="channels-page-title page-title" data-i18n="channels.title">Channels</h2>
           <p class="channels-page-subtitle" data-i18n="channels.subtitle">Connect IM platforms so your users can chat with the assistant via Feishu or WeCom</p>
         </div>
 
@@ -724,7 +736,7 @@
     <div id="mcp-panel" style="display:none">
       <div id="mcp-body">
         <div class="channels-page-header">
-          <h2 class="channels-page-title" data-i18n="mcp.title">MCP Servers</h2>
+          <h2 class="channels-page-title page-title" data-i18n="mcp.title">MCP Servers</h2>
           <p class="channels-page-subtitle" data-i18n="mcp.subtitle">Standard Model Context Protocol servers (Claude Desktop / Cursor compatible). Edit ~/.clacky/mcp.json to add or remove servers.</p>
         </div>
 
@@ -738,7 +750,7 @@
       <div id="extensions-body">
         <div class="channels-page-header">
           <div class="channels-page-header-main">
-            <h2 class="channels-page-title" data-i18n="extensions.title">Extensions</h2>
+            <h2 class="channels-page-title page-title" data-i18n="extensions.title">Extensions</h2>
             <p class="channels-page-subtitle" data-i18n="extensions.subtitle">Browse and manage extensions — add agents, skills, and panels to supercharge your workflow.</p>
           </div>
           <div class="extensions-header-actions">
@@ -754,11 +766,11 @@
           </div>
         </div>
 
-        <div class="extensions-toolbar">
+        <div class="extensions-toolbar page-tabs">
           <div class="extensions-filter-tabs">
-            <button type="button" class="extensions-filter-tab extensions-filter-tab-active" data-filter="all" id="tab-extensions-all" data-i18n="extensions.filter.all">All</button>
-            <button type="button" class="extensions-filter-tab" data-filter="brand" id="tab-extensions-brand" data-i18n="extensions.filter.all" style="display:none">All</button>
-            <button type="button" class="extensions-filter-tab" data-filter="installed" data-i18n="extensions.filter.installed">Installed</button>
+            <button type="button" class="extensions-filter-tab page-tab active" data-filter="all" id="tab-extensions-all" data-i18n="extensions.filter.all">All</button>
+            <button type="button" class="extensions-filter-tab page-tab" data-filter="brand" id="tab-extensions-brand" data-i18n="extensions.filter.all" style="display:none">All</button>
+            <button type="button" class="extensions-filter-tab page-tab" data-filter="installed" data-i18n="extensions.filter.installed">Installed</button>
           </div>
           <div class="extensions-toolbar-right">
             <input type="text" id="extensions-search-input" class="extensions-search" placeholder="Search extensions…" />
@@ -788,14 +800,14 @@
     <div id="trash-panel" style="display:none">
       <div id="trash-body">
         <div class="channels-page-header">
-          <h2 class="channels-page-title" data-i18n="trash.title">File Recall</h2>
+          <h2 class="channels-page-title page-title" data-i18n="trash.title">File Recall</h2>
           <p class="channels-page-subtitle" data-i18n="trash.subtitle">Files the agent moved to trash across all projects. Recall them back to where they were, or clear the ones you don't need.</p>
         </div>
 
-        <div id="trash-tabs">
+        <div id="trash-tabs" class="page-tabs">
           <div class="trash-tabs-left">
-            <button class="trash-tab active" data-tab="file-trash" id="tab-file-trash" data-i18n="trash.tabFile">文件回收</button>
-            <button class="trash-tab" data-tab="session-trash" id="tab-session-trash" data-i18n="trash.tabSession">会话回收</button>
+            <button class="trash-tab page-tab active" data-tab="file-trash" id="tab-file-trash" data-i18n="trash.tabFile">文件回收</button>
+            <button class="trash-tab page-tab" data-tab="session-trash" id="tab-session-trash" data-i18n="trash.tabSession">会话回收</button>
           </div>
         </div>
 
@@ -875,17 +887,17 @@
     <div id="profile-panel" style="display:none">
       <div id="profile-body">
         <div class="channels-page-header">
-          <h2 class="channels-page-title" data-i18n="profile.title">Assistant Memory</h2>
+          <h2 class="channels-page-title page-title" data-i18n="profile.title">Assistant Memory</h2>
           <p class="channels-page-subtitle" data-i18n="profile.subtitle">A window into the assistant's inner life: who it is, who you are, and what it remembers about your work together.</p>
         </div>
 
         <!-- Tab bar -->
-        <div class="profile-tabs" role="tablist">
-          <button class="profile-tab active" role="tab" aria-selected="true"
+        <div class="profile-tabs page-tabs" role="tablist">
+          <button class="profile-tab page-tab active" role="tab" aria-selected="true"
                   data-tab="soul" id="profile-tab-soul" data-i18n="profile.tab.soul">Soul</button>
-          <button class="profile-tab" role="tab" aria-selected="false"
+          <button class="profile-tab page-tab" role="tab" aria-selected="false"
                   data-tab="user" id="profile-tab-user" data-i18n="profile.tab.user">User</button>
-          <button class="profile-tab" role="tab" aria-selected="false"
+          <button class="profile-tab page-tab" role="tab" aria-selected="false"
                   data-tab="memories" id="profile-tab-memories" data-i18n="profile.tab.memories">Memories</button>
         </div>
 
@@ -954,18 +966,18 @@
     <!-- ── SETTINGS PANEL ──────────────────────────────────────────────── -->
     <div id="settings-panel" style="display:none">
       <header id="settings-header">
-        <span data-i18n="settings.title">Settings</span>
+        <h2 class="page-title" data-i18n="settings.title">Settings</h2>
       </header>
 
       <!-- Settings Tabs -->
-      <div id="settings-tabs">
-        <button class="settings-tab active" data-tab="models" data-i18n="settings.tabs.models">Models</button>
-        <button class="settings-tab" data-tab="ui" data-i18n="settings.tabs.ui">UI</button>
-        <button class="settings-tab" data-tab="general" data-i18n="settings.tabs.general">General</button>
-        <button class="settings-tab" data-tab="data" data-i18n="settings.tabs.data">Data</button>
+      <div id="settings-tabs" class="page-tabs">
+        <button class="settings-tab page-tab active" data-tab="models" data-i18n="settings.tabs.models">Models</button>
+        <button class="settings-tab page-tab" data-tab="ui" data-i18n="settings.tabs.ui">UI</button>
+        <button class="settings-tab page-tab" data-tab="general" data-i18n="settings.tabs.general">General</button>
+        <button class="settings-tab page-tab" data-tab="data" data-i18n="settings.tabs.data">Data</button>
         <!-- Extension tab slot: extensions add custom settings tabs here (button needs data-tab="<id>"). -->
         <span id="ext-slot-settings-tabs" data-slot="settings.tabs"></span>
-        <button class="settings-tab" data-tab="about" data-i18n="settings.tabs.about">About</button>
+        <button class="settings-tab page-tab" data-tab="about" data-i18n="settings.tabs.about">About</button>
       </div>
 
       <div id="settings-body">

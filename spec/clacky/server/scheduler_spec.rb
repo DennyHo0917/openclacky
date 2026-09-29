@@ -8,6 +8,8 @@ require "clacky/server/scheduler"
 RSpec.describe Clacky::Server::Scheduler do
   let(:tmpdir) { Dir.mktmpdir("clacky_scheduler_spec") }
 
+  before { stub_const("Clacky::Server::Scheduler::RUNS_FILE", File.join(tmpdir, "cron_runs.json")) }
+
   # Build a scheduler that uses tmpdir instead of ~/.clacky
   subject(:scheduler) do
     s = described_class.new(
@@ -209,6 +211,75 @@ RSpec.describe Clacky::Server::Scheduler do
 
       s.send(:fire_task, { "name" => "M", "task" => "my_task", "cron" => "* * * * *" })
       expect(captured).to be_empty
+    end
+
+    it "records a scheduled run once the runner executes the block" do
+      scheduler_with_runner.send(:fire_task, { "name" => "Morning", "task" => "my_task", "cron" => "* * * * *" })
+      fake_agent.define_singleton_method(:run) { |_prompt| :done }
+      captured[:block].call
+
+      run = scheduler_with_runner.list_runs.first
+      expect(run).to include("task" => "my_task", "session_id" => "session-abc", "trigger" => "schedule", "status" => "success")
+    end
+  end
+
+  describe "run history" do
+    before { scheduler.write_task("alpha", "a") }
+
+    it "marks a run as error and re-raises when the block fails" do
+      expect {
+        scheduler.track_run("alpha", "s1", trigger: :manual) { raise "boom" }
+      }.to raise_error("boom")
+
+      expect(scheduler.list_runs.first).to include("status" => "error", "error" => "boom", "trigger" => "manual")
+    end
+
+    it "marks a run as interrupted when the agent is interrupted" do
+      expect {
+        scheduler.track_run("alpha", "s1", trigger: :manual) { raise Clacky::AgentInterrupted }
+      }.to raise_error(Clacky::AgentInterrupted)
+
+      expect(scheduler.list_runs.first["status"]).to eq("interrupted")
+    end
+
+    it "lists runs newest-first and filters by task and query" do
+      scheduler.track_run("alpha", "s1", trigger: :manual) { :ok }
+      scheduler.track_run("beta", "s2", trigger: :schedule) { :ok }
+
+      expect(scheduler.list_runs.map { |r| r["task"] }).to eq(%w[beta alpha])
+      expect(scheduler.list_runs(task: "alpha").map { |r| r["session_id"] }).to eq(["s1"])
+      expect(scheduler.list_runs(q: "BET").map { |r| r["task"] }).to eq(["beta"])
+    end
+
+    it "deletes a single run by id" do
+      scheduler.track_run("alpha", "s1", trigger: :manual) { :ok }
+      scheduler.track_run("beta", "s2", trigger: :manual) { :ok }
+      id = scheduler.list_runs.find { |r| r["task"] == "alpha" }["id"]
+
+      expect(scheduler.delete_run(id)).to be true
+      expect(scheduler.list_runs.map { |r| r["task"] }).to eq(["beta"])
+      expect(scheduler.delete_run("missing")).to be false
+    end
+
+    it "exposes the latest run on each cron task" do
+      scheduler.track_run("alpha", "s1", trigger: :manual) { :ok }
+
+      task = scheduler.list_cron_tasks.find { |t| t["name"] == "alpha" }
+      expect(task["last_run"]).to include("status" => "success")
+    end
+
+    it "caps stored history at MAX_RUNS" do
+      stub_const("Clacky::Server::Scheduler::MAX_RUNS", 3)
+      5.times { |i| scheduler.track_run("alpha", "s#{i}", trigger: :manual) { :ok } }
+
+      expect(scheduler.list_runs.map { |r| r["session_id"] }).to eq(%w[s4 s3 s2])
+    end
+
+    it "turns runs left running by a previous process into interrupted on start" do
+      scheduler.start_run("alpha", "s1", trigger: :schedule)
+      scheduler.send(:mark_stale_runs_interrupted)
+
+      expect(scheduler.list_runs.first["status"]).to eq("interrupted")
     end
   end
 end

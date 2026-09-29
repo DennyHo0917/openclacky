@@ -670,6 +670,7 @@ module Clacky
         when ["POST",   "/api/projects"]      then api_create_project(req, res)
         when ["GET",    "/api/cron-tasks"]    then api_list_cron_tasks(res)
         when ["POST",   "/api/cron-tasks"]    then api_create_cron_task(req, res)
+        when ["GET",    "/api/cron-runs"]     then api_list_cron_runs(req, res)
         when ["GET",    "/api/skills"]         then api_list_skills(res)
         when ["GET",    "/api/agents"]         then api_list_agents(res)
         when ["GET",    "/api/config"]        then api_get_config(req, res)
@@ -907,6 +908,8 @@ module Clacky
           elsif method == "DELETE" && path.match?(%r{^/api/cron-tasks/[^/]+$})
             name = URI.decode_www_form_component(path.sub("/api/cron-tasks/", ""))
             api_delete_cron_task(name, res)
+          elsif method == "DELETE" && path.match?(%r{^/api/cron-runs/[^/]+$})
+            api_delete_cron_run(URI.decode_www_form_component(path.sub("/api/cron-runs/", "")), res)
           elsif method == "PATCH" && path.match?(%r{^/api/skills/[^/]+/toggle$})
             name = URI.decode_www_form_component(path.sub("/api/skills/", "").sub("/toggle", ""))
             api_toggle_skill(name, req, res)
@@ -4992,6 +4995,21 @@ module Clacky
         end
       end
 
+      # GET /api/cron-runs?task=&q=
+      def api_list_cron_runs(req, res)
+        runs = @scheduler.list_runs(task: req.query["task"].to_s, q: req.query["q"].to_s)
+        json_response(res, 200, { runs: runs })
+      end
+
+      # DELETE /api/cron-runs/:id
+      def api_delete_cron_run(id, res)
+        if @scheduler.delete_run(id)
+          json_response(res, 200, { ok: true })
+        else
+          json_response(res, 404, { error: "Run not found: #{id}" })
+        end
+      end
+
       # POST /api/cron-tasks/:name/run — execute immediately
       def api_run_cron_task(name, res)
         unless @scheduler.list_tasks.include?(name)
@@ -5004,7 +5022,7 @@ module Clacky
         FileUtils.mkdir_p(working_dir)
 
         session_id = build_session(name: session_name, working_dir: working_dir, permission_mode: :auto_approve)
-        @registry.update(session_id, pending_task: prompt, pending_working_dir: working_dir)
+        @registry.update(session_id, pending_task: prompt, pending_working_dir: working_dir, pending_cron_task: name)
         broadcast_session_update(session_id, created: true)
 
         json_response(res, 202, { ok: true, session: @registry.session_summary(session_id) })
@@ -7928,10 +7946,11 @@ module Clacky
         prompt          = session[:pending_task]
         working_dir     = session[:pending_working_dir]
         display_message = session[:pending_display_message]
+        cron_task       = session[:pending_cron_task]
         return unless prompt  # nothing pending
 
         # Clear the pending fields so a re-connect doesn't re-run
-        @registry.update(session_id, pending_task: nil, pending_working_dir: nil, pending_display_message: nil)
+        @registry.update(session_id, pending_task: nil, pending_working_dir: nil, pending_display_message: nil, pending_cron_task: nil)
 
         agent = nil
         @registry.with_session(session_id) { |s| agent = s[:agent] }
@@ -7947,7 +7966,13 @@ module Clacky
           web_ui&.show_user_message(display_message, source: :web)
         end
 
-        run_agent_task(session_id, agent) { agent.run(prompt, display_text: display_message) }
+        run_agent_task(session_id, agent) do
+          if cron_task
+            @scheduler.track_run(cron_task, session_id, trigger: :manual) { agent.run(prompt, display_text: display_message) }
+          else
+            agent.run(prompt, display_text: display_message)
+          end
+        end
       end
 
       # Interrupt every running agent thread and persist its session state.
