@@ -488,11 +488,72 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       expect(bot.answer_question_card("event" => { "action" => {} })).to eq(reply: {})
     end
 
-    it "declines questions the buttons cannot express" do
-      expect(bot.send_questions("oc_chat", [questions.first.merge(multi: true)])).to be_nil
+    it "declines questions without options" do
       expect(bot.send_questions("oc_chat", [questions.first.merge(options: [])])).to be_nil
       expect(bot.send_questions("oc_chat", [])).to be_nil
       expect(sent).to be_empty
+    end
+
+    context "with a multi-select question" do
+      let(:questions) do
+        [
+          { question: "Toppings?", description: "", options: %w[Egg Tofu Beef], multi: true,
+            allow_free_text: false, recommended: 0 },
+          { question: "Size?", description: "", options: %w[Small Large], multi: false,
+            allow_free_text: false, recommended: nil }
+        ]
+      end
+
+      def submit(token)
+        bot.answer_question_card("event" => { "action" => { "value" => { "question_card" => token, "submit" => true } } })
+      end
+
+      def buttons_of(reply)
+        reply[:card][:data].dig(:body, :elements).select { |e| e[:tag] == "button" }
+      end
+
+      it "preselects the recommendation, hints multi-select and adds a submit button" do
+        bot.send_questions("oc_chat", questions)
+
+        elements = JSON.parse(sent.last[1][:content]).dig("body", "elements")
+        buttons = elements.select { |e| e["tag"] == "button" }
+        expect(buttons.map { |b| b["type"] }).to eq(%w[primary_filled default default default default primary_filled])
+        expect(buttons.last.dig("text", "i18n_content")).to eq("zh_cn" => "提交", "en_us" => "Submit")
+        expect(buttons.last.dig("behaviors", 0, "value")).to eq("question_card" => card_token, "submit" => true)
+        expect(elements.map { |e| e["content"] }).to include("Select all that apply, then submit.")
+      end
+
+      it "toggles picks without answering, then submits every selection in option order" do
+        bot.send_questions("oc_chat", questions)
+        token = card_token
+
+        toggled = click(token, question: 0, option: 2)
+        expect(toggled[:text]).to be_nil
+        expect(toggled[:reply]).not_to have_key(:toast)
+        expect(buttons_of(toggled[:reply]).first(3).map { |b| b[:type] }).to eq(%w[primary_filled default primary_filled])
+
+        click(token, question: 0, option: 0)
+        click(token, question: 0, option: 1)
+        click(token, question: 1, option: 0)
+        switched = click(token, question: 1, option: 1)
+        expect(switched[:text]).to be_nil
+        expect(buttons_of(switched[:reply])[3, 2].map { |b| b[:type] }).to eq(%w[default primary_filled])
+
+        result = submit(token)
+        expect(result[:text]).to eq("Toppings?: Tofu; Beef\nSize?: Large")
+        expect(buttons_of(result[:reply])).to be_empty
+        expect(submit(token)[:reply][:toast][:type]).to eq("warning")
+      end
+
+      it "refuses to submit while a question has no pick" do
+        bot.send_questions("oc_chat", questions)
+
+        result = submit(card_token)
+
+        expect(result[:text]).to be_nil
+        expect(result[:reply][:toast][:type]).to eq("warning")
+        expect(result[:reply][:toast][:i18n]).to eq("zh_cn" => "请先完成所有问题。", "en_us" => "Please answer every question first.")
+      end
     end
 
     it "forgets a card whose send failed so a later click cannot answer it" do

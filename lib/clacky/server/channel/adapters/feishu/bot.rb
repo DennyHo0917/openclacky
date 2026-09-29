@@ -70,7 +70,7 @@ module Clacky
           QUESTION_CARD_TOKEN_KEY = "question_card"
           QUESTION_CARD_LIMIT = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
-          QuestionCardSession = Struct.new(:token, :questions, :context, :answers)
+          QuestionCardSession = Struct.new(:token, :questions, :context, :answers, :selections)
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -195,7 +195,8 @@ module Clacky
           def send_questions(chat_id, questions, context: nil, reply_to: nil)
             return nil unless question_card_supported?(questions)
 
-            session = QuestionCardSession.new(SecureRandom.hex(8), questions, context.to_s, {})
+            selections = questions.map { |q| q[:recommended] ? [q[:recommended]] : [] }
+            session = QuestionCardSession.new(SecureRandom.hex(8), questions, context.to_s, {}, selections)
             payload = {
               receive_id: chat_id,
               msg_type: "interactive",
@@ -216,7 +217,8 @@ module Clacky
             { message_id: response.dig("data", "message_id") }
           end
 
-          # Record one option click on a question card.
+          # Record one click on a question card: an option pick, or the submit
+          # button of a card that has multi-select questions.
           # @return [Hash] :reply for the callback response, and :text with the
           #   full answer once every question of the card has been answered.
           def answer_question_card(callback)
@@ -227,27 +229,16 @@ module Clacky
             token = value[QUESTION_CARD_TOKEN_KEY].to_s
             return { reply: {} } if token.empty?
 
-            session = @question_cards_mutex.synchronize { @question_cards[token] }
-            return { reply: { toast: question_card_toast("expired", "warning") } } unless session
-
-            question = session.questions[value["question"].to_i]
-            return { reply: {} } unless question
-
-            answer = Array(question[:options])[value["option"].to_i]
-            return { reply: {} } unless answer
-
+            # Lookup and mutation share one lock so a double click cannot answer twice.
             @question_cards_mutex.synchronize do
-              session.answers[value["question"].to_i] = answer
-              complete = session.answers.size == session.questions.size
-              @question_cards.delete(token) if complete
+              session = @question_cards[token]
+              next { reply: { toast: question_card_toast("expired", "warning") } } unless session
 
-              {
-                reply: {
-                  toast: question_card_toast("recorded", "success"),
-                  card: { type: "raw", data: build_question_card(session) }
-                },
-                text: complete ? question_card_answer_text(session) : nil
-              }
+              if value["submit"]
+                submit_question_card(session)
+              else
+                pick_question_option(session, value["question"].to_i, value["option"].to_i)
+              end
             end
           end
 
@@ -552,11 +543,62 @@ module Clacky
             "#{clean[0, CARDKIT_SUMMARY_MAX_LENGTH - 3]}..."
           end
 
-          # Buttons answer one question per click, so a question needing several
-          # picks — or with nothing to pick — has to stay on the text fallback.
+          # Every question needs options to click; multi-select questions switch
+          # the card to pick-then-submit.
           private def question_card_supported?(questions)
             questions.is_a?(Array) && !questions.empty? &&
-              questions.all? { |q| !q[:multi] && !Array(q[:options]).empty? }
+              questions.all? { |q| !Array(q[:options]).empty? }
+          end
+
+          # Single-choice cards answer on click. Once any question takes several
+          # picks, clicks only toggle selections and a submit button sends them.
+          private def question_card_submit_mode?(session)
+            session.questions.any? { |q| q[:multi] }
+          end
+
+          private def pick_question_option(session, question_index, option_index)
+            question = session.questions[question_index]
+            return { reply: {} } unless question && question[:options][option_index]
+
+            unless question_card_submit_mode?(session)
+              session.answers[question_index] = question[:options][option_index]
+              return complete_question_card(session) if session.answers.size == session.questions.size
+
+              return { reply: { toast: question_card_toast("recorded", "success"), card: question_card_reply(session) } }
+            end
+
+            selection = session.selections[question_index]
+            if !question[:multi]
+              selection.replace([option_index])
+            elsif selection.include?(option_index)
+              selection.delete(option_index)
+            else
+              selection << option_index
+            end
+            { reply: { card: question_card_reply(session) } }
+          end
+
+          private def submit_question_card(session)
+            if session.selections.any?(&:empty?)
+              return { reply: { toast: question_card_toast("incomplete", "warning") } }
+            end
+
+            session.questions.each_with_index do |question, index|
+              session.answers[index] = session.selections[index].sort.map { |i| question[:options][i] }.join("; ")
+            end
+            complete_question_card(session)
+          end
+
+          private def complete_question_card(session)
+            @question_cards.delete(session.token)
+            {
+              reply: { toast: question_card_toast("recorded", "success"), card: question_card_reply(session) },
+              text: question_card_answer_text(session)
+            }
+          end
+
+          private def question_card_reply(session)
+            { type: "raw", data: build_question_card(session) }
           end
 
           private def build_question_card(session)
@@ -569,6 +611,9 @@ module Clacky
 
             session.questions.each_with_index do |question, index|
               elements.concat(question_card_elements(session, question, index))
+            end
+            if question_card_submit_mode?(session) && session.answers.empty?
+              elements << question_submit_button(session.token)
             end
 
             { schema: "2.0", body: { elements: elements } }
@@ -592,11 +637,20 @@ module Clacky
               return elements
             end
 
+            submit_mode = question_card_submit_mode?(session)
             question[:options].each_with_index do |option, option_index|
-              elements << question_option_button(
-                session.token, index, option_index, option,
-                recommended: question[:recommended] == option_index
-              )
+              type = if submit_mode
+                session.selections[index].include?(option_index) ? "primary_filled" : "default"
+              else
+                question[:recommended] == option_index ? "primary" : "default"
+              end
+              elements << question_option_button(session.token, index, option_index, option, type: type)
+            end
+            if question[:multi]
+              elements << markdown_element(
+                Clacky::I18n.translations("channel.questions.multi_hint"),
+                text_size: "notation"
+              ) { |t| t }
             end
             if question[:allow_free_text]
               elements << markdown_element(
@@ -607,10 +661,10 @@ module Clacky
             elements
           end
 
-          private def question_option_button(token, question_index, option_index, label, recommended:)
+          private def question_option_button(token, question_index, option_index, label, type:)
             {
               tag: "button",
-              type: recommended ? "primary" : "default",
+              type: type,
               size: "small",
               width: "fill",
               text: { tag: "plain_text", content: label },
@@ -621,6 +675,20 @@ module Clacky
                   "question" => question_index,
                   "option" => option_index
                 }
+              }]
+            }
+          end
+
+          private def question_submit_button(token)
+            {
+              tag: "button",
+              type: "primary_filled",
+              size: "medium",
+              width: "fill",
+              text: { tag: "plain_text" }.merge(localized_card_text(Clacky::I18n.translations("channel.questions.submit")) { |t| t }),
+              behaviors: [{
+                type: "callback",
+                value: { QUESTION_CARD_TOKEN_KEY => token, "submit" => true }
               }]
             }
           end
