@@ -70,7 +70,7 @@ module Clacky
           QUESTION_CARD_TOKEN_KEY = "question_card"
           QUESTION_CARD_LIMIT = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
-          QuestionCardSession = Struct.new(:token, :questions, :context, :answers, :selections)
+          QuestionCardSession = Struct.new(:token, :chat_id, :questions, :context, :answers, :selections)
 
           def initialize(app_id:, app_secret:, domain: DEFAULT_DOMAIN)
             @app_id = app_id
@@ -196,7 +196,7 @@ module Clacky
             return nil unless question_card_supported?(questions)
 
             selections = questions.map { |q| q[:recommended] ? [q[:recommended]] : [] }
-            session = QuestionCardSession.new(SecureRandom.hex(8), questions, context.to_s, {}, selections)
+            session = QuestionCardSession.new(SecureRandom.hex(8), chat_id, questions, context.to_s, {}, selections)
             payload = {
               receive_id: chat_id,
               msg_type: "interactive",
@@ -239,6 +239,15 @@ module Clacky
               else
                 pick_question_option(session, value["question"].to_i, value["option"].to_i)
               end
+            end
+          end
+
+          # Drop the pending question cards of a chat: the user answered by
+          # typing, so a later click on those buttons must not answer again.
+          # @return [void]
+          def forget_question_cards(chat_id)
+            @question_cards_mutex.synchronize do
+              @question_cards.delete_if { |_, session| session.chat_id == chat_id }
             end
           end
 

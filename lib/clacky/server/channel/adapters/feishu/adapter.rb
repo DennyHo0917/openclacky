@@ -249,6 +249,10 @@ module Clacky
               return
             end
 
+            # The user is answering by typing, so pending card buttons must not
+            # be able to answer a second time.
+            @bot.forget_question_cards(event[:chat_id])
+
             # Download images and attach as file hashes
             image_files = []
             if event[:image_keys] && !event[:image_keys].empty?

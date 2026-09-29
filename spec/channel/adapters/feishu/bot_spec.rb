@@ -556,6 +556,18 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       end
     end
 
+    it "forgets the cards of one chat once the user answers by typing" do
+      bot.send_questions("oc_chat", questions)
+      typed = card_token
+      bot.send_questions("oc_other", questions)
+      untouched = card_token
+
+      bot.forget_question_cards("oc_chat")
+
+      expect(click(typed)[:reply][:toast][:type]).to eq("warning")
+      expect(click(untouched)[:text]).to eq("Hotpot")
+    end
+
     it "forgets a card whose send failed so a later click cannot answer it" do
       allow(bot).to receive(:post) do |path, payload, params: {}|
         sent << [path, payload, params]

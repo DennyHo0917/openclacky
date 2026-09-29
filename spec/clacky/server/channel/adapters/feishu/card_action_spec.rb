@@ -70,4 +70,22 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Adapter do
       expect(routed).to be_empty
     end
   end
+
+  describe "#handle_message_event" do
+    let(:message) { { type: :message, platform: :feishu, chat_id: "oc_chat", user_id: "ou_user", text: "Sushi", chat_type: :direct } }
+
+    it "forgets the pending cards of the chat so its buttons cannot answer again" do
+      expect(bot).to receive(:forget_question_cards).with("oc_chat")
+
+      adapter.handle_message_event(message)
+
+      expect(routed).to eq([message])
+    end
+
+    it "leaves the cards alone for a message it drops" do
+      expect(bot).not_to receive(:forget_question_cards)
+
+      adapter.handle_message_event(message.merge(unsupported: true))
+    end
+  end
 end
