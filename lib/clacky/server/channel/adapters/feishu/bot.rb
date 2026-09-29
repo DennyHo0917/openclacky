@@ -56,7 +56,14 @@ module Clacky
           CARDKIT_CONTENT_ELEMENT_ID = "content"
           CARDKIT_PROCESS_ELEMENT_ID = "process_history"
           CARDKIT_STATUS_ELEMENT_ID = "status"
-          CARDKIT_TERMINAL_STATES = %i[waiting success failed interrupted].freeze
+          CARDKIT_RUNNING_STATUS_COLOR = "grey"
+          CARDKIT_TERMINAL_STATUS_COLORS = {
+            waiting: "orange",
+            success: "green",
+            failed: "red",
+            interrupted: "grey"
+          }.freeze
+          CARDKIT_TERMINAL_STATES = CARDKIT_TERMINAL_STATUS_COLORS.keys.freeze
           CARDKIT_LOCALE_CODES = { "zh" => "zh_cn", "en" => "en_us" }.freeze
           CARDKIT_SUMMARY_MAX_LENGTH = 50
           ProgressCardSession = Struct.new(:card_id, :sequence, :closed, :mutex, :process_panel)
@@ -346,9 +353,9 @@ module Clacky
               .merge(localized_card_text(text) { |t| sanitize_images_for_card(t) })
           end
 
-          private def status_element(text)
+          private def status_element(text, color: CARDKIT_RUNNING_STATUS_COLOR)
             { tag: "markdown", element_id: CARDKIT_STATUS_ELEMENT_ID }
-              .merge(localized_card_text(text) { |t| progress_status_markdown(t) })
+              .merge(localized_card_text(text) { |t| progress_status_markdown(t, color) })
           end
 
           # Text is a String, or a { locale => String } Hash rendered through
@@ -405,7 +412,10 @@ module Clacky
             end
 
             perform_cardkit_request("write final progress status", session.card_id) do
-              replace_card_element(session, status_element(status_text))
+              replace_card_element(
+                session,
+                status_element(status_text, color: CARDKIT_TERMINAL_STATUS_COLORS.fetch(state.to_sym))
+              )
             end
 
             perform_cardkit_request("close progress card", session.card_id) do
@@ -462,8 +472,8 @@ module Clacky
             session.sequence += 1
           end
 
-          private def progress_status_markdown(text)
-            "<font color='grey'>#{sanitize_images_for_card(text.to_s)}</font>"
+          private def progress_status_markdown(text, color)
+            "<font color='#{color}'>#{sanitize_images_for_card(text.to_s)}</font>"
           end
 
           private def truncate_cardkit_summary(text)

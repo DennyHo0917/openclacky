@@ -308,10 +308,10 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       )
       expect(calls[1][1]).to include(sequence: 3)
       expect(JSON.parse(calls[1][1][:element])).to include(
-        "content" => "<font color='grey'>Done</font>",
+        "content" => "<font color='green'>Done</font>",
         "i18n_content" => {
-          "zh_cn" => "<font color='grey'>已完成</font>",
-          "en_us" => "<font color='grey'>Done</font>"
+          "zh_cn" => "<font color='green'>已完成</font>",
+          "en_us" => "<font color='green'>Done</font>"
         }
       )
     end
@@ -360,10 +360,10 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
     end
 
     {
-      failed: ["Failed", "失败"],
-      interrupted: ["Stopped", "已停止"],
-      waiting: ["Waiting for input", "等待输入"]
-    }.each do |state, (label, zh_label)|
+      failed: ["Failed", "失败", "red"],
+      interrupted: ["Stopped", "已停止", "grey"],
+      waiting: ["Waiting for input", "等待输入", "orange"]
+    }.each do |state, (label, zh_label, color)|
       it "marks a #{state} task as #{label}" do
         bot.send_progress_card("oc_chat", "Thinking...", reply_to: "om_user")
         status_element = nil
@@ -374,9 +374,10 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
         allow(bot).to receive(:patch).and_return("code" => 0)
 
         expect(bot.update_progress_card("card_progress", "Result", state: state)).to be true
+        expect(status_element["content"]).to eq("<font color='#{color}'>#{label}</font>")
         expect(status_element["i18n_content"]).to eq(
-          "zh_cn" => "<font color='grey'>#{zh_label}</font>",
-          "en_us" => "<font color='grey'>#{label}</font>"
+          "zh_cn" => "<font color='#{color}'>#{zh_label}</font>",
+          "en_us" => "<font color='#{color}'>#{label}</font>"
         )
       end
     end
