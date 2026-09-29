@@ -165,14 +165,19 @@ RSpec.describe Clacky::Channel::Adapters::Feishu::Bot do
       expect(inserts.size).to eq(1)
       expect(inserts[0]).to include(
         type: "insert_before",
-        target_element_id: "status",
+        target_element_id: "content",
         sequence: 2,
         uuid: "i_card_progress_2"
       )
       panel = JSON.parse(inserts[0][:elements]).first
       expect(panel).to include("tag" => "collapsible_panel", "expanded" => false)
-      expect(panel.dig("header", "title", "content")).to eq("View process")
+      expect(panel.dig("header", "title")).to eq(
+        "tag" => "plain_text", "content" => "View process", "text_color" => "grey", "text_size" => "notation"
+      )
+      expect(panel.dig("header", "icon", "color")).to eq("grey")
+      expect(panel.dig("border", "color")).to eq("grey")
       expect(panel.dig("elements", 0)).to include(
+        "text_size" => "notation",
         "element_id" => "process_history",
         "content" => "First step\n\nLatest step"
       )

@@ -319,20 +319,25 @@ module Clacky
               tag: "collapsible_panel",
               expanded: false,
               header: {
-                title: { tag: "plain_text", content: "View process" },
+                title: { tag: "plain_text", content: "View process", text_color: "grey", text_size: "notation" },
+                vertical_align: "center",
                 icon: {
                   tag: "standard_icon",
                   token: "down-small-ccm_outlined",
+                  color: "grey",
                   size: "16px 16px"
                 },
                 icon_position: "right",
                 icon_expanded_angle: -180
               },
               border: { color: "grey", corner_radius: "5px" },
+              vertical_spacing: "8px",
+              padding: "8px 8px 8px 8px",
               elements: [
                 {
                   tag: "markdown",
                   content: sanitize_images_for_card(history.to_s),
+                  text_size: "notation",
                   element_id: CARDKIT_PROCESS_ELEMENT_ID
                 }
               ]
@@ -427,7 +432,7 @@ module Clacky
               "/open-apis/cardkit/v1/cards/#{session.card_id}/elements",
               {
                 type: "insert_before",
-                target_element_id: CARDKIT_STATUS_ELEMENT_ID,
+                target_element_id: CARDKIT_CONTENT_ELEMENT_ID,
                 elements: JSON.generate([process_panel_element(history)]),
                 sequence: sequence,
                 uuid: "i_#{session.card_id}_#{sequence}"
