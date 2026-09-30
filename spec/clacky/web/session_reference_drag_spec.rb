@@ -20,19 +20,17 @@ RSpec.describe "Web session reference drag and drop" do
     expect(sessions).to include('type: "session"')
   end
 
-  it "routes reference drops before the existing file upload path in both composers" do
-    main_reference = sessions.index("Composer.insertDroppedChip")
-    main_files = sessions.index("const files = Array.from(e.dataTransfer.files)", main_reference)
-    new_reference = new_session.index("Composer.insertDroppedChip")
-    new_files = new_session.index("Array.from(e.dataTransfer.files || [])", new_reference)
-
-    expect(main_reference).to be < main_files
-    expect(new_reference).to be < new_files
+  it "binds the full current and new-session pages as shared drop zones" do
+    expect(sessions).to include('zone: document.getElementById("chat-panel")')
+    expect(new_session).to include('zone: $("welcome")')
+    expect(sessions).not_to include('inputArea.addEventListener("drop"')
+    expect(new_session).not_to include('composer.addEventListener("drop"')
   end
 
-  it "provides a compact drag preview and drop-target feedback" do
+  it "provides a compact drag preview and page-level drop-target feedback" do
     expect(styles).to include(".reference-drag-preview")
     expect(styles).to include('.session-item[draggable="true"]')
-    expect(styles).to include(".new-session-composer.drag-over .ns-input-bar-card")
+    expect(styles).to include("#chat-panel.drag-over")
+    expect(styles).to include("#welcome.drag-over")
   end
 end

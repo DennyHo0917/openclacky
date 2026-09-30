@@ -15,11 +15,15 @@ class Element {
     this.parentNode = null;
     this.className = "";
     this.inputEvents = 0;
+    this.listeners = {};
     this.classList = {
       add: name => {
         const names = new Set(this.className.split(/\s+/).filter(Boolean));
         names.add(name);
         this.className = Array.from(names).join(" ");
+      },
+      remove: name => {
+        this.className = this.className.split(/\s+/).filter(value => value && value !== name).join(" ");
       },
       contains: name => this.className.split(/\s+/).includes(name),
     };
@@ -39,8 +43,14 @@ class Element {
     if (node === this) return true;
     return this.childNodes.some(child => child === node || (child.contains && child.contains(node)));
   }
+  addEventListener(type, callback) {
+    (this.listeners[type] ||= []).push(callback);
+  }
   setAttribute(name, value) { this.attrs[name] = String(value); }
-  dispatchEvent(event) { if (event.type === "input") this.inputEvents += 1; }
+  dispatchEvent(event) {
+    if (event.type === "input") this.inputEvents += 1;
+    (this.listeners[event.type] || []).forEach(callback => callback(event));
+  }
   focus() { this.focused = true; }
   get previousSibling() {
     if (!this.parentNode) return null;
@@ -122,10 +132,17 @@ vm.runInContext(source, context);
 
 const Composer = context.Clacky.Composer;
 
-function transfer(initial = {}) {
+function transfer(initial = {}, files = []) {
   const values = new Map(Object.entries(initial));
   return {
     effectAllowed: "none",
+    dropEffect: "none",
+    files,
+    get types() {
+      const types = Array.from(values.keys());
+      if (files.length > 0) types.push("Files");
+      return types;
+    },
     setData(type, value) { values.set(type, value); },
     getData(type) { return values.get(type) || ""; },
     value(type) { return values.get(type); },
@@ -176,3 +193,46 @@ assert.equal(insertedChip.dataset.sessionId, "session-123");
 assert.equal(insertedChip.dataset.name, "Investigate timeout");
 assert.equal(input.inputEvents, 1, "drop notifies the composer input pipeline");
 assert.equal(input.focused, true, "drop restores focus to the composer");
+
+assert.equal(Composer.acceptsDrop(dt), true, "internal references are accepted");
+assert.equal(Composer.acceptsDrop(transfer({}, [{ name: "report.pdf" }])), true, "files are accepted");
+assert.equal(Composer.acceptsDrop(transfer({ "text/plain": "plain text" })), false, "plain text is ignored");
+
+const zone = new Element("section");
+const zoneInput = new Element("div");
+const uploaded = [];
+Composer.bindDropZone({ zone, input: zoneInput, onFiles: files => uploaded.push(...files) });
+
+let prevented = false;
+zone.dispatchEvent({
+  type: "dragover",
+  dataTransfer: dt,
+  preventDefault() { prevented = true; },
+});
+assert.equal(prevented, true, "supported drags opt into browser drop handling");
+assert.equal(dt.dropEffect, "copy");
+assert.equal(zone.classList.contains("drag-over"), true, "the full zone is highlighted");
+
+zone.dispatchEvent({
+  type: "drop",
+  dataTransfer: dt,
+  clientX: 100,
+  clientY: 100,
+  preventDefault() {},
+});
+assert.equal(zone.classList.contains("drag-over"), false, "drop feedback is cleared");
+assert.ok(
+  zoneInput.childNodes.some(node => node.classList && node.classList.contains("mention-chip")),
+  "dropping a reference anywhere in the zone inserts it into the composer"
+);
+
+const file = { name: "report.pdf" };
+const fileTransfer = transfer({}, [file]);
+zone.dispatchEvent({
+  type: "drop",
+  dataTransfer: fileTransfer,
+  clientX: 100,
+  clientY: 100,
+  preventDefault() {},
+});
+assert.deepEqual(uploaded, [file], "dropping files anywhere in the zone uses the attachment callback");

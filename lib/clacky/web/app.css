@@ -6233,16 +6233,11 @@ body {
   display: none;
 }
 
-/* Drop-target highlight when dragging a file or reference over a composer. */
-#input-area.drag-over {
-  background: var(--color-accent-soft);
+/* Page-level drop target for session references and file attachments. */
+#chat-panel.drag-over,
+#welcome.drag-over {
   outline: 2px dashed var(--color-accent-primary);
-  outline-offset: -2px;
-}
-.new-session-composer.drag-over .ns-input-bar-card {
-  background: var(--color-accent-soft);
-  outline: 2px dashed var(--color-accent-primary);
-  outline-offset: -2px;
+  outline-offset: -5px;
 }
 
 /* Attachment strip — top part of the composer card, above the input row */
