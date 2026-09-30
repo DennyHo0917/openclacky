@@ -38,13 +38,17 @@ module Clacky
       # @param process_messages_resolver [Proc] callable returning true/false — whether
       #   tool-process messages (interim narration, file/shell previews) should be
       #   sent. Resolved per call so config changes apply without rebuilding.
-      def initialize(event, adapter_resolver, status_messages_resolver = nil, process_messages_resolver = nil)
+      # @param progress_cards_resolver [Proc] callable returning true/false — whether
+      #   a task may use a live-updating progress card. Read once per task in
+      #   #start_task so toggling mid-task never strands a half-updated card.
+      def initialize(event, adapter_resolver, status_messages_resolver = nil, process_messages_resolver = nil, progress_cards_resolver = nil)
         @platform                 = event[:platform]
         @chat_id                  = event[:chat_id]
         @message_id               = event[:message_id]  # original message to reply under
         @adapter_resolver         = adapter_resolver
         @status_messages_resolver = status_messages_resolver
         @process_messages_resolver = process_messages_resolver
+        @progress_cards_resolver  = progress_cards_resolver
         @buffer                   = []
         @mutex                    = Mutex.new
         @progress_mutex           = Mutex.new
@@ -76,7 +80,7 @@ module Clacky
         return false unless status_messages?
 
         adapter = @adapter_resolver.call
-        unless progress_updates_supported?(adapter)
+        unless progress_cards? && progress_updates_supported?(adapter)
           send_text(plain_text(progress_text("thinking")), reply_to: nil)
           return false
         end
@@ -342,6 +346,10 @@ module Clacky
 
       private def process_messages?
         @process_messages_resolver ? @process_messages_resolver.call : false
+      end
+
+      private def progress_cards?
+        @progress_cards_resolver ? @progress_cards_resolver.call : true
       end
 
       private def progress_updates_supported?(adapter)

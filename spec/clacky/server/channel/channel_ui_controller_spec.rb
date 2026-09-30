@@ -19,6 +19,7 @@ RSpec.describe Clacky::Channel::ChannelUIController do
   before do
     @status_enabled  = true
     @process_enabled = true
+    @cards_enabled   = true
   end
 
   def progress_text(key)
@@ -65,7 +66,49 @@ RSpec.describe Clacky::Channel::ChannelUIController do
       end
     end
     let(:progress_controller) do
-      described_class.new(event, -> { progress_adapter }, -> { @status_enabled }, -> { @process_enabled })
+      described_class.new(event, -> { progress_adapter }, -> { @status_enabled }, -> { @process_enabled }, -> { @cards_enabled })
+    end
+
+    context "when progress cards are turned off" do
+      before { @cards_enabled = false }
+
+      it "sends every status and process update as its own message" do
+        expect(progress_controller.start_task).to be false
+
+        progress_controller.show_tool_call("terminal", { "command" => "ls" })
+        progress_controller.show_assistant_message("Checking the config", files: [], interim: true)
+        progress_controller.show_shell_preview("ls -la")
+        progress_controller.show_assistant_message("All done", files: [])
+        progress_controller.show_complete(iterations: 2, cost: nil, duration: 1.2, cost_source: nil)
+
+        expect(progress_adapter).not_to have_received(:send_progress)
+        expect(progress_adapter).not_to have_received(:update_progress)
+        expect(sent).to eq(["Thinking...", "Checking the config", "$ ls -la", "All done", "Done · 2 steps · 1.2s"])
+      end
+
+      it "sends the Thinking status without the reply thread, like adapters without cards" do
+        progress_controller.start_task
+        expect(progress_adapter).to have_received(:send_text).with("chat_1", "Thinking...", reply_to: nil)
+      end
+    end
+
+    it "keeps an in-flight card when progress cards are turned off mid-task" do
+      progress_controller.start_task
+      @cards_enabled = false
+
+      progress_controller.show_tool_call("terminal", { "command" => "ls" })
+      progress_controller.show_assistant_message("All done", files: [])
+
+      expect(progress_updates).to eq([
+        ["chat_1", "card_1", progress_text("tool.terminal"), :working],
+        ["chat_1", "card_1", "All done", :success]
+      ])
+      expect(sent).to be_empty
+    end
+
+    it "uses cards when no progress-cards resolver is given" do
+      legacy = described_class.new(event, -> { progress_adapter }, -> { true }, -> { true })
+      expect(legacy.start_task).to be true
     end
 
     it "updates one progress message from thinking through working to the final reply" do

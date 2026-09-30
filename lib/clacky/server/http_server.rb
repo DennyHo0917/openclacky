@@ -782,6 +782,8 @@ module Clacky
             api_channel_status_messages(req, res)
           elsif method == "PATCH" && path == "/api/channels/process_messages"
             api_channel_process_messages(req, res)
+          elsif method == "PATCH" && path == "/api/channels/progress_cards"
+            api_channel_progress_cards(req, res)
           elsif method == "PATCH" && path.match?(%r{^/api/channels/[^/]+/enabled$})
             platform = path.sub("/api/channels/", "").sub("/enabled", "")
             api_toggle_channel(platform, req, res)
@@ -4106,7 +4108,7 @@ module Clacky
           }.merge(platform_safe_fields(platform, config))
         end
 
-        json_response(res, 200, { channels: platforms, status_messages: config.status_messages_enabled?, process_messages: config.process_messages_enabled? })
+        json_response(res, 200, { channels: platforms, status_messages: config.status_messages_enabled?, process_messages: config.process_messages_enabled?, progress_cards: config.progress_cards_enabled? })
       end
 
       # GET /api/mcp
@@ -4774,6 +4776,23 @@ module Clacky
         @channel_manager.update_config(config)
 
         json_response(res, 200, { ok: true, process_messages: config.process_messages_enabled? })
+      rescue StandardError => e
+        json_response(res, 422, { ok: false, error: e.message })
+      end
+
+      # PATCH /api/channels/progress_cards
+      # Body: { progress_cards: true|false }
+      # Global toggle for live-updating progress cards on platforms that
+      # support them. Hot-applies from the next task without restarting adapters.
+      def api_channel_progress_cards(req, res)
+        enabled = parse_json_body(req)["progress_cards"] == true
+        config  = Clacky::ChannelConfig.load
+
+        config.set_progress_cards(enabled)
+        config.save
+        @channel_manager.update_config(config)
+
+        json_response(res, 200, { ok: true, progress_cards: config.progress_cards_enabled? })
       rescue StandardError => e
         json_response(res, 422, { ok: false, error: e.message })
       end

@@ -33,10 +33,14 @@ module Clacky
     #   ("Thinking...", "Done" summary) sent to IM chats
     # @param process_messages [Boolean] global toggle for tool-process messages
     #   (interim narration, file/shell previews) sent to IM chats
-    def initialize(channels: {}, status_messages: false, process_messages: false)
+    # @param progress_cards [Boolean] global toggle for live-updating progress
+    #   cards on platforms that support them
+    def initialize(channels: {}, status_messages: false, process_messages: false, progress_cards: true)
       @channels         = channels || {}
       @status_messages  = status_messages == true ? true : false
       @process_messages = process_messages == true ? true : false
+      # Opt-out (unlike the toggles above): missing key keeps cards on for existing users.
+      @progress_cards   = progress_cards == false ? false : true
     end
 
     # Load from disk. Returns an empty instance if the file does not exist.
@@ -49,7 +53,7 @@ module Clacky
         data = {}
       end
 
-      new(channels: data["channels"] || {}, status_messages: data["status_messages"], process_messages: data["process_messages"])
+      new(channels: data["channels"] || {}, status_messages: data["status_messages"], process_messages: data["process_messages"], progress_cards: data["progress_cards"])
     end
 
     # Persist to disk.
@@ -63,7 +67,7 @@ module Clacky
     # Serialize to YAML string.
     # @return [String]
     def to_yaml
-      YAML.dump({ "status_messages" => @status_messages, "process_messages" => @process_messages, "channels" => @channels })
+      YAML.dump({ "status_messages" => @status_messages, "process_messages" => @process_messages, "progress_cards" => @progress_cards, "channels" => @channels })
     end
 
     # Returns true if at least one channel is enabled.
@@ -176,6 +180,19 @@ module Clacky
       @process_messages = enabled ? true : false
     end
 
+    # Global toggle: whether task progress is shown in one live-updating card
+    # on platforms that support it. When off, status and process updates are
+    # sent as separate messages instead. Defaults to true.
+    def progress_cards_enabled?
+      @progress_cards == true
+    end
+
+    # Enable/disable progress cards globally.
+    # @param enabled [Boolean]
+    def set_progress_cards(enabled)
+      @progress_cards = enabled ? true : false
+    end
+
     # Enable a platform (requires it to already be configured).
     # @param platform [Symbol, String]
     # @raise [ArgumentError] if the platform has no stored credentials yet.
@@ -202,7 +219,7 @@ module Clacky
     # Deep copy - prevents callers from mutating shared config state.
     # @return [ChannelConfig]
     def deep_copy
-      self.class.new(channels: JSON.parse(JSON.generate(@channels)), status_messages: @status_messages, process_messages: @process_messages)
+      self.class.new(channels: JSON.parse(JSON.generate(@channels)), status_messages: @status_messages, process_messages: @process_messages, progress_cards: @progress_cards)
     end
   end
 end
