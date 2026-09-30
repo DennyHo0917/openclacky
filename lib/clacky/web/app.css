@@ -1577,6 +1577,13 @@ body {
   margin-bottom: 1px;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
+.session-item[draggable="true"] {
+  cursor: grab;
+}
+.session-item.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
 /* Two-row text block next to dot */
 .session-body {
   flex: 1;
@@ -6226,8 +6233,13 @@ body {
   display: none;
 }
 
-/* Drop-target highlight when dragging a file over the input area */
+/* Drop-target highlight when dragging a file or reference over a composer. */
 #input-area.drag-over {
+  background: var(--color-accent-soft);
+  outline: 2px dashed var(--color-accent-primary);
+  outline-offset: -2px;
+}
+.new-session-composer.drag-over .ns-input-bar-card {
   background: var(--color-accent-soft);
   outline: 2px dashed var(--color-accent-primary);
   outline-offset: -2px;
@@ -6817,6 +6829,30 @@ body {
   display: inline-flex;
   align-items: center;
   color: var(--color-text-secondary);
+}
+.reference-drag-preview {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  z-index: 10000;
+  max-width: 16rem;
+  min-height: 2.25rem;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  margin: 0;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 0.75rem;
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-card);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  pointer-events: none;
+}
+.reference-drag-preview .mention-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Mention badge inside user message bubbles ─────────────────────────── */

@@ -1,0 +1,178 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+class Element {
+  constructor(tag = "div") {
+    this.tagName = tag.toUpperCase();
+    this.nodeType = 1;
+    this.childNodes = [];
+    this.dataset = {};
+    this.attrs = {};
+    this.parentNode = null;
+    this.className = "";
+    this.inputEvents = 0;
+    this.classList = {
+      add: name => {
+        const names = new Set(this.className.split(/\s+/).filter(Boolean));
+        names.add(name);
+        this.className = Array.from(names).join(" ");
+      },
+      contains: name => this.className.split(/\s+/).includes(name),
+    };
+  }
+  appendChild(child) {
+    this.childNodes.push(child);
+    child.parentNode = this;
+    return child;
+  }
+  insertBefore(child, next) {
+    const index = next ? this.childNodes.indexOf(next) : this.childNodes.length;
+    this.childNodes.splice(index < 0 ? this.childNodes.length : index, 0, child);
+    child.parentNode = this;
+    return child;
+  }
+  contains(node) {
+    if (node === this) return true;
+    return this.childNodes.some(child => child === node || (child.contains && child.contains(node)));
+  }
+  setAttribute(name, value) { this.attrs[name] = String(value); }
+  dispatchEvent(event) { if (event.type === "input") this.inputEvents += 1; }
+  focus() { this.focused = true; }
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return index > 0 ? this.parentNode.childNodes[index - 1] : null;
+  }
+  get nextSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return this.parentNode.childNodes[index + 1] || null;
+  }
+}
+
+class TextNode {
+  constructor(value) {
+    this.nodeType = 3;
+    this.nodeValue = value;
+    this.parentNode = null;
+  }
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return index > 0 ? this.parentNode.childNodes[index - 1] : null;
+  }
+  get nextSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return this.parentNode.childNodes[index + 1] || null;
+  }
+}
+
+class Range {
+  selectNodeContents(node) { this.startContainer = node; this.startOffset = node.childNodes.length; }
+  collapse() {}
+  setStart(node, offset) { this.startContainer = node; this.startOffset = offset; }
+  setStartAfter(node) {
+    this.startContainer = node.parentNode;
+    this.startOffset = node.parentNode.childNodes.indexOf(node) + 1;
+  }
+  insertNode(node) {
+    const next = this.startContainer.childNodes[this.startOffset] || null;
+    this.startContainer.insertBefore(node, next);
+  }
+}
+
+const selection = {
+  rangeCount: 0,
+  anchorNode: null,
+  removeAllRanges() {},
+  addRange(range) { this.rangeCount = 1; this.anchorNode = range.startContainer; },
+};
+const document = {
+  body: null,
+  createElement: tag => new Element(tag),
+  createElementNS: (_ns, tag) => new Element(tag),
+  createTextNode: text => new TextNode(text),
+  createRange: () => new Range(),
+};
+
+const context = {
+  console,
+  JSON,
+  setTimeout,
+  clearTimeout,
+  Event: class Event { constructor(type) { this.type = type; } },
+  document,
+  Clacky: {},
+};
+context.window = context;
+context.getSelection = () => selection;
+context.globalThis = context;
+vm.createContext(context);
+
+const source = fs.readFileSync(
+  path.resolve(__dirname, "../../lib/clacky/web/components/composer.js"),
+  "utf8"
+);
+vm.runInContext(source, context);
+
+const Composer = context.Clacky.Composer;
+
+function transfer(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    effectAllowed: "none",
+    setData(type, value) { values.set(type, value); },
+    getData(type) { return values.get(type) || ""; },
+    value(type) { return values.get(type); },
+  };
+}
+
+const dt = transfer();
+assert.equal(Composer.beginReferenceDrag(dt, {
+  type: "session",
+  name: "Investigate timeout",
+  sessionId: "session-123",
+}), true);
+assert.equal(dt.effectAllowed, "copy");
+assert.equal(dt.value("text/plain"), "@Investigate timeout");
+assert.deepEqual(
+  JSON.parse(JSON.stringify(Composer.readDraggedChip(dt))),
+  { type: "session", name: "Investigate timeout", sessionId: "session-123" }
+);
+
+const wirePayload = transfer({
+  "application/x-openclacky-reference": JSON.stringify({
+    type: "session",
+    name: "Wire format",
+    session_id: "session-wire",
+  }),
+});
+assert.deepEqual(
+  JSON.parse(JSON.stringify(Composer.readDraggedChip(wirePayload))),
+  { type: "session", name: "Wire format", sessionId: "session-wire" }
+);
+
+assert.equal(Composer.readDraggedChip(transfer({
+  "application/x-openclacky-reference": "not json",
+})), null);
+assert.equal(Composer.readDraggedChip(transfer({
+  "application/x-openclacky-reference": JSON.stringify({ type: "file", path: "/tmp/a" }),
+})), null);
+assert.equal(Composer.readDraggedChip(transfer({
+  "application/x-openclacky-reference": JSON.stringify({ type: "session", name: "Missing id" }),
+})), null);
+
+const input = new Element("div");
+assert.equal(Composer.insertDroppedChip(input, dt, 10, 10), true);
+const insertedChip = input.childNodes.find(node => node.classList && node.classList.contains("mention-chip"));
+assert.ok(insertedChip, "drop inserts a mention chip");
+assert.equal(insertedChip.dataset.mentionType, "session");
+assert.equal(insertedChip.dataset.sessionId, "session-123");
+assert.equal(insertedChip.dataset.name, "Investigate timeout");
+assert.equal(input.inputEvents, 1, "drop notifies the composer input pipeline");
+assert.equal(input.focused, true, "drop restores focus to the composer");
