@@ -53,7 +53,7 @@ module Clacky
 
       def generate_transcription(audio_base64:, mime_type:, **_kwargs)
         transcription_error_response(
-          error: "Speech-to-text is not supported by #{self.class.name.split("::").last}. Use the openclacky gateway with an STT model such as or-stt-gemini-3-5-flash.",
+          error: "Speech-to-text is not supported by #{self.class.name.split("::").last}. Use the openclacky gateway with an STT model such as or-stt-gemini-3-8-flash.",
           error_type: "not_implemented",
           provider: ""
         )
@@ -63,7 +63,7 @@ module Clacky
       #   video_understanding_error_response(...)
       def understand_video(video_base64:, mime_type:, prompt: nil, **_kwargs)
         video_understanding_error_response(
-          error: "Video understanding is not supported by #{self.class.name.split("::").last}. Use the openclacky gateway with a video understanding model such as or-gemini-3-5-flash.",
+          error: "Video understanding is not supported by #{self.class.name.split("::").last}. Use the openclacky gateway with a video understanding model such as or-gemini-3-8-flash.",
           error_type: "not_implemented",
           provider: ""
         )

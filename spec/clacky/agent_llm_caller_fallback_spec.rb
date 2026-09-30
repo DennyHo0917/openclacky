@@ -7,8 +7,8 @@
 RSpec.describe Clacky::Agent, "fallback model integration" do
   # ── shared helpers ─────────────────────────────────────────────────────────
 
-  let(:primary_model)  { "abs-claude-sonnet-4-6" }
-  let(:fallback_model) { "abs-claude-sonnet-4-5" }
+  let(:primary_model)  { "abs-claude-sonnet-5" }
+  let(:fallback_model) { "abs-claude-sonnet-4-6" }
 
   # Config that maps to openclacky provider so fallback_model_for works
   let(:config) do

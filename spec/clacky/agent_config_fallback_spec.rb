@@ -174,8 +174,8 @@ RSpec.describe Clacky::AgentConfig, "fallback state machine" do
 
   describe "#fallback_model_for" do
     it "returns the configured fallback for the primary model" do
-      result = config.fallback_model_for("abs-claude-sonnet-4-6")
-      expect(result).to eq("abs-claude-sonnet-4-5")
+      result = config.fallback_model_for("abs-claude-sonnet-5")
+      expect(result).to eq("abs-claude-sonnet-4-6")
     end
 
     it "returns nil for a model with no fallback configured" do

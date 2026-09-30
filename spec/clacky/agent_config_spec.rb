@@ -1188,7 +1188,7 @@ RSpec.describe Clacky::AgentConfig do
       it "returns Haiku for Claude-family primaries" do
         expect(Clacky::Providers.lite_model("openclacky", "abs-claude-sonnet-4-6"))
           .to eq("abs-claude-haiku-4-5")
-        expect(Clacky::Providers.lite_model("openclacky", "abs-claude-opus-4-6"))
+        expect(Clacky::Providers.lite_model("openclacky", "abs-claude-opus-5"))
           .to eq("abs-claude-haiku-4-5")
       end
 

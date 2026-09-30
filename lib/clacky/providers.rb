@@ -48,18 +48,14 @@ module Clacky
           "abs-claude-opus-5",
           "abs-claude-opus-4-8",
           "abs-claude-opus-4-7",
-          "abs-claude-opus-4-6",
           "abs-claude-sonnet-5",
           "abs-claude-sonnet-4-6",
-          "abs-claude-sonnet-4-5",
           "abs-claude-haiku-4-5",
           "dsk-deepseek-flash",
           "dsk-deepseek-v4-pro",
           "or-gemini-3-1-pro",
           "or-gemini-3-8-flash",
-          "or-gemini-3-7-flash",
-          "or-gemini-3-6-flash",
-          "or-gemini-3-5-flash"
+          "or-gemini-3-7-flash"
         ],
         # Image generation models served by the openclacky platform
         # gateway. The gateway exposes a standard OpenAI-compatible
@@ -112,15 +108,11 @@ module Clacky
         "stt_models" => [
           "or-stt-gemini-3-8-flash",
           "or-stt-gemini-3-7-flash",
-          "or-stt-gemini-3-6-flash",
-          "or-stt-gemini-3-5-flash",
           "or-stt-gemini-1-5-pro"
         ],
         "stt_model_aliases" => {
           "or-stt-gemini-3-8-flash" => "Gemini 3.8 Flash STT",
           "or-stt-gemini-3-7-flash" => "Gemini 3.7 Flash STT",
-          "or-stt-gemini-3-6-flash" => "Gemini 3.6 Flash STT",
-          "or-stt-gemini-3-5-flash" => "Gemini 3.5 Flash STT",
           "or-stt-gemini-1-5-pro"   => "Gemini 1.5 Pro STT"
         },
         "default_stt_model" => "or-stt-gemini-3-8-flash",
@@ -130,15 +122,11 @@ module Clacky
         "video_understanding_models" => [
           "or-gemini-3-8-flash",
           "or-gemini-3-7-flash",
-          "or-gemini-3-6-flash",
-          "or-gemini-3-5-flash",
           "or-gemini-3-1-pro"
         ],
         "video_understanding_model_aliases" => {
           "or-gemini-3-8-flash" => "Gemini 3.8 Flash",
           "or-gemini-3-7-flash" => "Gemini 3.7 Flash",
-          "or-gemini-3-6-flash" => "Gemini 3.6 Flash",
-          "or-gemini-3-5-flash" => "Gemini 3.5 Flash",
           "or-gemini-3-1-pro"   => "Gemini 3.1 Pro"
         },
         "default_video_understanding_model" => "or-gemini-3-8-flash",
@@ -178,16 +166,14 @@ module Clacky
           "abs-claude-opus-5"     => "abs-claude-haiku-4-5",
           "abs-claude-opus-4-8"   => "abs-claude-haiku-4-5",
           "abs-claude-opus-4-7"   => "abs-claude-haiku-4-5",
-          "abs-claude-opus-4-6"   => "abs-claude-haiku-4-5",
           "abs-claude-sonnet-5"   => "abs-claude-haiku-4-5",
           "abs-claude-sonnet-4-6" => "abs-claude-haiku-4-5",
-          "abs-claude-sonnet-4-5" => "abs-claude-haiku-4-5",
           "abs-gpt-6-astra"       => "abs-gpt-6-luna",
           "abs-gpt-6-sol"         => "abs-gpt-6-luna",
           "abs-gpt-5.6-sol"       => "abs-gpt-5.6-luna",
           "abs-gpt-5.6-terra"     => "abs-gpt-5.6-luna",
           "dsk-deepseek-v4-pro"   => "dsk-deepseek-flash",
-          "or-gemini-3-1-pro"     => "or-gemini-3-6-flash"
+          "or-gemini-3-1-pro"     => "or-gemini-3-8-flash"
         },
         # Fallback chain: if a model is unavailable, try the next one in order.
         # Keys are primary model names; values are the fallback model to use instead.
@@ -196,8 +182,7 @@ module Clacky
           "abs-claude-fable-5"    => "abs-claude-opus-5",
           "abs-claude-opus-5-5"   => "abs-claude-opus-5",
           "abs-claude-opus-5"     => "abs-claude-opus-4-8",
-          "abs-claude-sonnet-5"   => "abs-claude-sonnet-4-6",
-          "abs-claude-sonnet-4-6" => "abs-claude-sonnet-4-5"
+          "abs-claude-sonnet-5"   => "abs-claude-sonnet-4-6"
         },
         # Selectable endpoints exposed in the Base URL dropdown. The gateway
         # currently has a single global endpoint, but the array shape is kept
