@@ -12011,6 +12011,18 @@ body.setup-mode {
   font-family: monospace;
   font-size: 0.8125rem;
 }
+/* .btn-primary is sized for standalone CTAs, so next to the license input it
+   stands taller; pin both to one height so the row reads level. */
+.brand-activate-fields .field-input,
+.brand-activate-fields .btn-primary {
+  height: 2rem;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.brand-activate-fields .btn-primary {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
 
 /* "Get a Serial Number" helper row below the activation form */
 .brand-get-serial {
