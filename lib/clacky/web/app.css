@@ -454,6 +454,7 @@ input[type="checkbox"] { accent-color: var(--color-accent-primary); }
 .skel-text-sm  { height: 0.75rem;  width: 8rem;  }
 .skel-tabs     { height: 2rem;  width: 16rem; border-radius: 8px; }
 .skel-select   { height: 2rem;  width: 8rem;  }
+.skel-btn      { height: 2rem;  width: 7rem; border-radius: 8px; margin-left: auto; }
 .skel-value    { height: 1.5rem;   width: 5rem;  }
 .skel-label    { height: 0.75rem;  width: 4rem;  margin-top: 0.375rem; }
 .skel-block    { height: 9rem;  width: 100%; }
@@ -13665,8 +13666,7 @@ body.setup-mode {
   flex: 0 0 auto;
 }
 .billing-controls .segmented-control,
-.billing-model-filter,
-.billing-share-btn {
+.billing-model-filter {
   height: 2rem;
 }
 
@@ -13698,6 +13698,8 @@ body.setup-mode {
   align-items: center;
   justify-content: center;
   margin-left: auto;
+  flex: 0 0 auto;
+  height: 2rem;
   gap: 0.375rem;
   padding: 0.4375rem 0.875rem;
   border: none;
@@ -15773,6 +15775,10 @@ body.setup-mode {
   .billing-model-filter {
     width: auto;
     flex: 1 1 0;
+  }
+  .billing-share-btn {
+    align-self: flex-start;
+    margin-left: 0;
   }
   @media (max-width: 500px) {
     .billing-controls .segmented-control {
