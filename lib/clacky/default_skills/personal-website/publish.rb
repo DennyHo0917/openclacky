@@ -22,12 +22,9 @@ require "fileutils"
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-# Primary CDN-accelerated endpoint.
-# Fallback bypasses EdgeOne and is used when the primary times out or errors.
-PRIMARY_HOST  = ENV.fetch("CLACKY_LICENSE_SERVER", "https://www.openclacky.com")
-FALLBACK_HOST = "https://openclacky.up.railway.app"
-# When the env override is set we use only that host (dev/test mode).
-API_HOSTS     = ENV["CLACKY_LICENSE_SERVER"] ? [PRIMARY_HOST] : [PRIMARY_HOST, FALLBACK_HOST]
+# Platform endpoint; CLACKY_LICENSE_SERVER overrides it for dev/test.
+PRIMARY_HOST = ENV.fetch("CLACKY_LICENSE_SERVER", "https://www.openclacky.com")
+API_HOSTS    = [PRIMARY_HOST]
 
 HMAC_SECRET  = ENV.fetch("CARD_HMAC_SECRET", "openclacky-card-v1-default-secret-change-me")
 TOKEN_FILE   = File.expand_path("~/clacky_workspace/personal_website/token.json")
@@ -64,15 +61,14 @@ end
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-# Resilient HTTP request: retries on transient errors, then fails over to the
-# fallback host before giving up.
+# Resilient HTTP request: retries on transient errors before giving up.
 #
 # Returns [http_code_int, parsed_body_hash].
-# Calls exit(1) on network failure (all hosts/attempts exhausted).
+# Calls exit(1) on network failure (all attempts exhausted).
 def http_request(method, path, body: nil, extra_headers: {})
   last_error = nil
 
-  API_HOSTS.each_with_index do |base, host_index|
+  API_HOSTS.each do |base|
     ATTEMPTS_PER_HOST.times do |attempt|
       begin
         result = do_http_request(method, base, path, body: body, extra_headers: extra_headers)

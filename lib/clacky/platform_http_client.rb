@@ -8,14 +8,12 @@ require_relative "locales/i18n"
 
 module Clacky
   # PlatformHttpClient provides a resilient HTTP client for all calls to the
-  # OpenClacky platform API (www.openclacky.com and its fallback domain).
+  # OpenClacky platform API (www.openclacky.com).
   #
   # Features:
   #   - Automatic retry with exponential back-off on transient failures
-  #   - Transparent domain failover: if the primary domain times out or returns a
-  #     5xx error, the request is automatically retried against the fallback domain
-  #   - Unified large-file download entry point (#download_file) that reuses the
-  #     same primary → fallback failover policy as API calls
+  #   - Unified large-file download entry point (#download_file) sharing the
+  #     same retry policy as API calls
   #   - Override via CLACKY_LICENSE_SERVER env var (auto-detected, used in development)
   #
   # Usage:
@@ -25,16 +23,12 @@ module Clacky
   #   #        or { success: false, error: "...", data: {} }
   class PlatformHttpClient
     # Primary endpoint
-    PRIMARY_HOST   = "https://www.openclacky.com"
-    # Secondary CDN-accelerated endpoint (China mainland)
-    SECONDARY_HOST = "https://api.1024code.com"
-    # Direct fallback — bypasses EdgeOne, used when the primary times out
-    FALLBACK_HOST  = "https://openclacky.up.railway.app"
+    PRIMARY_HOST = "https://www.openclacky.com"
 
-    # Number of attempts per domain (1 = no retry within the same domain)
-    ATTEMPTS_PER_HOST = 1
-    # Initial back-off between retries within the same domain (seconds)
-    INITIAL_BACKOFF   = 0.5
+    # Attempts per request: the initial try plus one retry
+    MAX_ATTEMPTS = 2
+    # Back-off before a retry (seconds), doubled on each further attempt
+    INITIAL_BACKOFF = 0.5
     # Connection / read timeouts (seconds) for API calls
     OPEN_TIMEOUT  = 5
     READ_TIMEOUT  = 15
@@ -53,15 +47,12 @@ module Clacky
       invalid_device_token device_token_revoked device_token_expired owner_user_not_found
     ].freeze
 
-    # Auto-detects the target host(s):
-    #   - When CLACKY_LICENSE_SERVER is set → single host (dev override, no failover)
-    #   - Otherwise                   → [PRIMARY_HOST, SECONDARY_HOST, FALLBACK_HOST]
+    # Auto-detects the platform endpoint:
+    #   - When CLACKY_LICENSE_SERVER is set → that URL (dev override)
+    #   - Otherwise                        → PRIMARY_HOST
     def initialize
-      if (override = ENV["CLACKY_LICENSE_SERVER"]) && !override.empty?
-        @hosts = [override]
-      else
-        @hosts = [PRIMARY_HOST, SECONDARY_HOST, FALLBACK_HOST]
-      end
+      override  = ENV["CLACKY_LICENSE_SERVER"]
+      @base_url = override && !override.empty? ? override : PRIMARY_HOST
     end
 
     # Send a POST request with a JSON body and return a normalised result hash.
@@ -71,7 +62,7 @@ module Clacky
     # @param headers [Hash]    Additional HTTP headers (optional)
     # @return [Hash]  { success: Boolean, data: Hash, error: String }
     def post(path, payload, headers: {})
-      request_with_failover(:post, path, payload, headers)
+      request_with_retry(:post, path, payload, headers)
     end
 
     # Send a GET request and return a normalised result hash.
@@ -81,17 +72,17 @@ module Clacky
     # @param headers [Hash]    Additional HTTP headers (optional)
     # @return [Hash]  { success: Boolean, data: Hash, error: String }
     def get(path, headers: {})
-      request_with_failover(:get, path, nil, headers)
+      request_with_retry(:get, path, nil, headers)
     end
 
     # Send a PATCH request.  Same contract as #post.
     def patch(path, payload, headers: {})
-      request_with_failover(:patch, path, payload, headers)
+      request_with_retry(:patch, path, payload, headers)
     end
 
     # Send a DELETE request (no body).
     def delete(path, headers: {})
-      request_with_failover(:delete, path, nil, headers)
+      request_with_retry(:delete, path, nil, headers)
     end
 
     # Send a multipart/form-data POST.
@@ -103,34 +94,27 @@ module Clacky
     # @return [Hash]  { success: Boolean, data: Hash, error: String }
     def multipart_post(path, body_bytes, boundary, read_timeout: READ_TIMEOUT)
       headers = { "Content-Type" => "multipart/form-data; boundary=#{boundary}" }
-      request_with_failover(:multipart_post, path, body_bytes, headers,
-                            read_timeout_override: read_timeout)
+      request_with_retry(:multipart_post, path, body_bytes, headers,
+                         read_timeout_override: read_timeout)
     end
 
     # Send a multipart/form-data PATCH.  Same contract as #multipart_post.
     def multipart_patch(path, body_bytes, boundary, read_timeout: READ_TIMEOUT)
       headers = { "Content-Type" => "multipart/form-data; boundary=#{boundary}" }
-      request_with_failover(:multipart_patch, path, body_bytes, headers,
-                            read_timeout_override: read_timeout)
+      request_with_retry(:multipart_patch, path, body_bytes, headers,
+                         read_timeout_override: read_timeout)
     end
 
-    # Stream a remote URL to a local file path, with automatic primary → secondary
-    # host failover.
+    # Stream a remote URL to a local file path, retrying transient failures.
     #
     # This is the unified entry point for all large-file downloads (brand skill
     # ZIPs, platform-hosted assets, etc.). Callers should NOT build their own
-    # Net::HTTP loops — failover, retry, redirects, and timeouts are handled here.
+    # Net::HTTP loops — retry, redirects, and timeouts are handled here.
     #
-    # Host failover policy:
-    #   - If +url+'s host matches PRIMARY_HOST and the request fails with a
-    #     retryable error (timeout, connection reset, SSL, 5xx), the URL is
-    #     rewritten to SECONDARY_HOST (same path/query) and retried.
-    #   - Both hosts serve the same Rails backend and share +secret_key_base+,
-    #     so ActiveStorage signed_ids resolve identically on either.
-    #   - Third-party hosts (e.g. S3 presigned URLs reached via redirect) are
-    #     fetched as-is without host rewriting.
+    # The URL is always fetched as-is: third-party hosts (S3 presigned URLs
+    # reached via redirect, CDNs, user-provided URLs) are never rewritten.
     #
-    # Each host gets ATTEMPTS_PER_HOST attempts with exponential back-off.
+    # The request gets MAX_ATTEMPTS attempts with exponential back-off.
     # Up to DOWNLOAD_MAX_REDIRECTS redirects are followed per attempt.
     #
     # @param url  [String]   Full URL to download
@@ -140,39 +124,23 @@ module Clacky
     # @param read_timeout [Integer] Override read timeout (seconds)
     # @return [Hash] { success: Boolean, bytes: Integer, error: String }
     def download_file(url, dest, read_timeout: DOWNLOAD_READ_TIMEOUT)
-      candidate_urls = [url]
-      # Only auto-add a secondary candidate when the URL is on our primary host.
-      # External hosts (S3, CDNs, user-provided URLs) are fetched as-is.
-      if primary_host_url?(url)
-        candidate_urls << swap_to_secondary_host(url)
-      end
-
       last_error = nil
       FileUtils.mkdir_p(File.dirname(dest))
       tmp_dest = "#{dest}.part"
 
-      candidate_urls.each_with_index do |candidate, host_index|
-        ATTEMPTS_PER_HOST.times do |attempt|
-          begin
-            bytes = stream_download(candidate, tmp_dest, read_timeout: read_timeout)
-            File.rename(tmp_dest, dest)
-            return { success: true, bytes: bytes, error: nil }
-          rescue RetryableNetworkError => e
-            last_error = e
-            backoff    = INITIAL_BACKOFF * (2**attempt)
-            Clacky::Logger.debug(
-              "[PlatformHTTP] DOWNLOAD #{candidate} attempt #{attempt + 1} failed: " \
-              "#{e.message} — retrying in #{backoff}s"
-            )
-            sleep(backoff)
-          end
-        end
-
-        if host_index + 1 < candidate_urls.size
+      MAX_ATTEMPTS.times do |attempt|
+        begin
+          bytes = stream_download(url, tmp_dest, read_timeout: read_timeout)
+          File.rename(tmp_dest, dest)
+          return { success: true, bytes: bytes, error: nil }
+        rescue RetryableNetworkError => e
+          last_error = e
+          backoff    = INITIAL_BACKOFF * (2**attempt)
           Clacky::Logger.debug(
-            "[PlatformHTTP] Primary host exhausted for download, switching to secondary: " \
-            "#{candidate_urls[host_index + 1]}"
+            "[PlatformHTTP] DOWNLOAD #{url} attempt #{attempt + 1} failed: " \
+            "#{e.message} — retrying in #{backoff}s"
           )
+          sleep(backoff)
         end
       end
 
@@ -180,34 +148,9 @@ module Clacky
       { success: false, bytes: 0, error: "Download failed: #{last_error&.message || "unknown"}" }
     end
 
-    # True when +url+ targets the primary platform host.
-    # Used by #download_file to decide whether secondary-host rewriting is safe.
-    private def primary_host_url?(url)
-      return false if url.nil? || url.empty?
-
-      uri = URI.parse(url)
-      primary = URI.parse(PRIMARY_HOST)
-      uri.host == primary.host
-    rescue URI::InvalidURIError
-      false
-    end
-
-    # Rewrite +url+ so its host is the secondary host (same path + query).
-    # Callers must have already confirmed the URL's host is PRIMARY_HOST via
-    # #primary_host_url? — this method does not validate that precondition.
-    private def swap_to_secondary_host(url)
-      uri       = URI.parse(url)
-      secondary = URI.parse(SECONDARY_HOST)
-      uri.scheme = secondary.scheme
-      uri.host   = secondary.host
-      # Only apply an explicit port when secondary declares a non-default one
-      uri.port = secondary.port if secondary.port && secondary.port != secondary.default_port
-      uri.to_s
-    end
-
     # Execute a streaming GET with redirect following, writing the response body
     # to +dest+ as it arrives. Raises RetryableNetworkError on any transient
-    # failure so the caller can decide whether to retry / failover.
+    # failure so the caller can decide whether to retry.
     #
     # @return [Integer] Number of bytes written
     private def stream_download(url, dest, read_timeout:)
@@ -247,7 +190,7 @@ module Clacky
               # 5xx is retryable, 4xx is terminal — but we don't have separate
               # handling in the existing API path and fallback is still useful
               # for e.g. upstream 502/503, so treat everything non-2xx/3xx as
-              # retryable to match the spirit of request_with_failover.
+              # retryable to match the spirit of request_with_retry.
               raise RetryableNetworkError, "HTTP #{resp.code}"
             end
           end
@@ -272,33 +215,25 @@ module Clacky
       raise RetryableNetworkError, e.message
     end
 
-    private def request_with_failover(method, path, payload, extra_headers, read_timeout_override: nil)
+    private def request_with_retry(method, path, payload, extra_headers, read_timeout_override: nil)
       last_error = nil
 
-      @hosts.each_with_index do |base, host_index|
-        ATTEMPTS_PER_HOST.times do |attempt|
-          begin
-            return execute_request(method, base, path, payload, extra_headers,
-                                   read_timeout_override: read_timeout_override)
-          rescue RetryableNetworkError => e
-            last_error = e
-            backoff    = INITIAL_BACKOFF * (2**attempt)
-            Clacky::Logger.debug(
-              "[PlatformHTTP] #{method.upcase} #{base}#{path} attempt #{attempt + 1} failed: " \
-              "#{e.message} — retrying in #{backoff}s"
-            )
-            sleep(backoff)
-          end
-        end
-
-        if host_index + 1 < @hosts.size
+      MAX_ATTEMPTS.times do |attempt|
+        begin
+          return execute_request(method, @base_url, path, payload, extra_headers,
+                                 read_timeout_override: read_timeout_override)
+        rescue RetryableNetworkError => e
+          last_error = e
+          backoff    = INITIAL_BACKOFF * (2**attempt)
           Clacky::Logger.debug(
-            "[PlatformHTTP] Primary host exhausted, switching to fallback: #{@hosts[host_index + 1]}"
+            "[PlatformHTTP] #{method.upcase} #{@base_url}#{path} attempt #{attempt + 1} failed: " \
+            "#{e.message} — retrying in #{backoff}s"
           )
+          sleep(backoff)
         end
       end
 
-      # All hosts / attempts exhausted
+      # All attempts exhausted
       { success: false, error: "Network error: #{last_error&.message || "unknown"}", data: {} }
     end
 

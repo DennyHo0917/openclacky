@@ -523,13 +523,7 @@ module Clacky
       @current_model_id = id
       @current_model_index = index
 
-      if previous_id != id
-        @session_model_overlay = nil
-        # Reset URL fallback when switching models — the new model has its own
-        # base_url and the old fallback endpoint is irrelevant (or even wrong).
-        @url_fallback_active = false
-        @url_fallback_base_url = nil
-      end
+      @session_model_overlay = nil if previous_id != id
 
       true
     end
@@ -545,15 +539,8 @@ module Clacky
       index = @models.find_index { |m| m["model"].to_s.downcase == name_str }
       return false if index.nil?
 
-      previous_id = @current_model_id
       @current_model_id = @models[index]["id"]
       @current_model_index = index
-
-      if previous_id != @current_model_id
-        # Reset URL fallback when switching models — same rationale as switch_model_by_id.
-        @url_fallback_active = false
-        @url_fallback_base_url = nil
-      end
 
       true
     end
@@ -1154,63 +1141,6 @@ module Clacky
         # :primary_ok (nil) and :probing both use the primary model
         model_name
       end
-    end
-
-    # ── URL-level fallback ─────────────────────────────────────────────────
-    # Independent from the model-name fallback above.  When all max_retries
-    # on the primary endpoint are exhausted, the caller may switch to a
-    # secondary gateway URL (same model, different host) via these methods.
-    # The URL fallback is intentionally one-shot per session — we do not
-    # probe or reset it automatically, keeping the logic simple.
-
-    # Look up the fallback base URL for the current model's provider.
-    # Returns nil if:
-    #   - provider cannot be determined
-    #   - provider is not openclacky (URL failover is only supported for the
-    #     OpenClacky gateway; other providers have no secondary endpoint)
-    #   - current base_url is already the fallback URL (user picked the
-    #     Secondary/China node directly — switching to the same URL does nothing)
-    # @return [String, nil]
-    def fallback_base_url_for_current_provider
-      m = current_model
-      return nil unless m
-
-      # Use strict URL matching to identify the provider — no inference.
-      # resolve_provider would incorrectly return "openclacky" for localhost
-      # addresses and clacky-* api keys, triggering unwanted failover.
-      # find_by_base_url only matches registered preset URLs, so localhost
-      # and other non-openclacky endpoints correctly return nil.
-      provider_id = Clacky::Providers.find_by_base_url(m["base_url"])
-      return nil unless provider_id == Clacky::Providers::OPENCLACKY_ID
-
-      fallback_url = Clacky::Providers.fallback_base_url(provider_id)
-      return nil unless fallback_url
-
-      # Don't offer a fallback when the current base_url is already the
-      # fallback endpoint — switching to the same URL accomplishes nothing.
-      current_base = m["base_url"].to_s.chomp("/")
-      return nil if current_base == fallback_url.to_s.chomp("/")
-
-      fallback_url
-    end
-
-    # Activate the URL fallback: override base_url with the secondary gateway.
-    # Idempotent — safe to call multiple times.
-    # @param fallback_url [String] the secondary gateway URL
-    def activate_url_fallback!(fallback_url)
-      @url_fallback_active = true
-      @url_fallback_base_url = fallback_url
-    end
-
-    # Returns true when the secondary gateway URL is in use.
-    def url_fallback_active?
-      @url_fallback_active == true
-    end
-
-    # The effective base URL for API calls.
-    # Returns the URL-fallback override when active, otherwise the model's configured base_url.
-    def effective_base_url
-      @url_fallback_active ? @url_fallback_base_url : base_url
     end
 
     # Get current model configuration.

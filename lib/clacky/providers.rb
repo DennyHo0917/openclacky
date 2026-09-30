@@ -199,17 +199,11 @@ module Clacky
           "abs-claude-sonnet-5"   => "abs-claude-sonnet-4-6",
           "abs-claude-sonnet-4-6" => "abs-claude-sonnet-4-5"
         },
-        # Secondary gateway URL used when the primary base_url is unreachable
-        # after max retries. The model name stays the same — only the endpoint
-        # changes. Nil / absent means no URL fallback for this provider.
-        "fallback_base_url" => "https://llm.1024code.com",
-        # Two selectable endpoints exposed in the Base URL dropdown:
-        #   Primary   — global CDN, lowest latency for most regions.
-        #   Secondary — China-optimised relay (1024code.com), useful when
-        #               the primary is unreachable from mainland China.
+        # Selectable endpoints exposed in the Base URL dropdown. The gateway
+        # currently has a single global endpoint, but the array shape is kept
+        # so the dropdown keeps working and regional endpoints can be added later.
         "endpoint_variants" => [
-          { "label" => "Primary (Global)",  "label_key" => "settings.models.baseurl.variant.openclacky_primary",   "base_url" => "https://api.openclacky.com" }.freeze,
-          { "label" => "Secondary (China)", "label_key" => "settings.models.baseurl.variant.openclacky_secondary", "base_url" => "https://llm.1024code.com"   }.freeze
+          { "label" => "Primary (Global)",  "label_key" => "settings.models.baseurl.variant.openclacky_primary",   "base_url" => "https://api.openclacky.com" }.freeze
         ].freeze,
         "website_url" => "https://www.openclacky.com/ai-keys"
       }.freeze,
@@ -1113,16 +1107,6 @@ module Clacky
       def fallback_model(provider_id, model)
         preset = PRESETS[provider_id]
         preset&.dig("fallback_models", model)
-      end
-
-      # Get the fallback base URL for a provider (used when primary endpoint is unreachable).
-      # Returns nil if the provider has no secondary gateway configured.
-      # @param provider_id [String] The provider identifier
-      # @return [String, nil] The fallback base URL or nil
-      def fallback_base_url(provider_id)
-        preset = PRESETS[provider_id]
-        url = preset&.dig("fallback_base_url")
-        url&.empty? ? nil : url
       end
 
       # Find provider ID by base URL.

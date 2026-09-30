@@ -262,58 +262,42 @@ RSpec.describe Clacky::ExtensionPackager do
     end
   end
 
-  describe ".install from URL with CDN failover" do
+  describe ".install from URL" do
     def packed_zip_bytes(id)
       scaffold(id)
       File.binread(described_class.pack(id, source_dir: local, out_dir: out).path)
     end
 
-    it "falls back to the secondary CDN host when the primary connection is reset" do
+    let(:remote_url) { "#{Clacky::PlatformHttpClient::PRIMARY_HOST}/rails/active_storage/demo.zip" }
+
+    it "downloads and installs a zip served at a platform URL" do
       zip_bytes   = packed_zip_bytes("demo")
-      primary_url = "#{Clacky::PlatformHttpClient::PRIMARY_HOST}/rails/active_storage/demo.zip"
       called_urls = []
 
       allow(URI).to receive(:open) do |url, *_args, &blk|
         called_urls << url
-        if url.start_with?(Clacky::PlatformHttpClient::PRIMARY_HOST)
-          raise Errno::ECONNRESET, "Connection reset by peer"
-        end
         blk.call(StringIO.new(zip_bytes))
       end
 
-      res = described_class.install(primary_url, installed_dir: installed)
+      res = described_class.install(remote_url, installed_dir: installed)
 
       expect(res.ext_id).to eq("demo")
       expect(File).to exist(File.join(installed, "demo", "ext.yml"))
-      expect(called_urls).to contain_exactly(
-        primary_url,
-        primary_url.sub(Clacky::PlatformHttpClient::PRIMARY_HOST, Clacky::PlatformHttpClient::SECONDARY_HOST)
-      )
+      expect(called_urls).to eq([remote_url])
     end
 
-    it "raises a packaged Error instead of a raw connection reset when both hosts fail" do
+    it "raises a packaged Error instead of a raw connection reset when the download fails" do
       allow(URI).to receive(:open) { raise Errno::ECONNRESET, "Connection reset by peer" }
 
-      url = "#{Clacky::PlatformHttpClient::PRIMARY_HOST}/rails/active_storage/demo.zip"
-      expect { described_class.install(url, installed_dir: installed) }
+      expect { described_class.install(remote_url, installed_dir: installed) }
         .to raise_error(described_class::Error, /failed to download .*Connection reset by peer/)
     end
 
-    it "falls back on unexpected error classes too, e.g. a corrupt gzip stream" do
-      zip_bytes   = packed_zip_bytes("demo")
-      primary_url = "#{Clacky::PlatformHttpClient::PRIMARY_HOST}/rails/active_storage/demo.zip"
-      called_urls = []
+    it "wraps unexpected error classes too, e.g. a corrupt gzip stream" do
+      allow(URI).to receive(:open) { raise Zlib::DataError, "bad gzip" }
 
-      allow(URI).to receive(:open) do |url, *_args, &blk|
-        called_urls << url
-        raise Zlib::DataError, "bad gzip" if url.start_with?(Clacky::PlatformHttpClient::PRIMARY_HOST)
-        blk.call(StringIO.new(zip_bytes))
-      end
-
-      res = described_class.install(primary_url, installed_dir: installed)
-
-      expect(res.ext_id).to eq("demo")
-      expect(called_urls.length).to eq(2)
+      expect { described_class.install(remote_url, installed_dir: installed) }
+        .to raise_error(described_class::Error, /bad gzip/)
     end
   end
 

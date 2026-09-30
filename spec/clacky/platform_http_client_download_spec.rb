@@ -56,11 +56,10 @@ RSpec.describe Clacky::PlatformHttpClient, "#download_file" do
     calls
   end
 
-  describe "primary → secondary failover" do
-    let(:primary_url)  { "#{described_class::PRIMARY_HOST}/rails/active_storage/blobs/redirect/abc/file.zip" }
-    let(:secondary_url) { "#{described_class::SECONDARY_HOST}/rails/active_storage/blobs/redirect/abc/file.zip" }
+  describe "retry policy" do
+    let(:primary_url) { "#{described_class::PRIMARY_HOST}/rails/active_storage/blobs/redirect/abc/file.zip" }
 
-    it "succeeds on the first attempt without touching the fallback" do
+    it "succeeds on the first attempt" do
       calls = stub_stream([:ok])
 
       result = client.download_file(primary_url, dest)
@@ -70,19 +69,18 @@ RSpec.describe Clacky::PlatformHttpClient, "#download_file" do
       expect(calls).to eq([primary_url])
     end
 
-    it "retries the primary host once, then swaps to secondary host" do
-      err = Clacky::PlatformHttpClient::RetryableNetworkError.new("Timeout")
+    it "retries the same URL when an attempt fails" do
+      err   = Clacky::PlatformHttpClient::RetryableNetworkError.new("Timeout")
       calls = stub_stream([err, :ok])
       allow(client).to receive(:sleep) # skip back-off
 
       result = client.download_file(primary_url, dest)
 
       expect(result[:success]).to be true
-      # 1 attempt on primary + 1 successful on fallback (ATTEMPTS_PER_HOST = 1)
-      expect(calls).to eq([primary_url, secondary_url])
+      expect(calls).to eq([primary_url, primary_url])
     end
 
-    it "reports a structured failure when every host is exhausted" do
+    it "reports a structured failure after every attempt fails" do
       err = Clacky::PlatformHttpClient::RetryableNetworkError.new("Connection error: reset")
       stub_stream([err, err])
       allow(client).to receive(:sleep)
@@ -96,32 +94,14 @@ RSpec.describe Clacky::PlatformHttpClient, "#download_file" do
       expect(File.exist?("#{dest}.part")).to be false
     end
 
-    it "does NOT swap host for non-primary URLs (e.g. S3 presigned URLs)" do
+    it "fetches external URLs (e.g. S3 presigned) as-is" do
       external = "https://openclacky-skills.s3.amazonaws.com/abc.zip?sig=xyz"
-      err = Clacky::PlatformHttpClient::RetryableNetworkError.new("Timeout")
-      calls = stub_stream([err])
-      allow(client).to receive(:sleep)
+      calls = stub_stream([:ok])
 
       result = client.download_file(external, dest)
 
-      expect(result[:success]).to be false
-      # Only one attempt against the original host — no rewritten URL (ATTEMPTS_PER_HOST = 1).
+      expect(result[:success]).to be true
       expect(calls).to eq([external])
-    end
-  end
-
-  describe "URL host rewriting" do
-    it "preserves path + query when swapping to the secondary host" do
-      url = "#{described_class::PRIMARY_HOST}/path/a/b?x=1&y=2"
-      calls = stub_stream([
-        Clacky::PlatformHttpClient::RetryableNetworkError.new("Timeout"),
-        :ok
-      ])
-      allow(client).to receive(:sleep)
-
-      client.download_file(url, dest)
-
-      expect(calls.last).to eq("#{described_class::SECONDARY_HOST}/path/a/b?x=1&y=2")
     end
   end
 end

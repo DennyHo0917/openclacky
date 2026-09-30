@@ -240,30 +240,13 @@ module Clacky
         src = source.to_s
         if src.match?(%r{\Ahttps?://})
           dest = File.join(tmp, "download.zip")
-          download(src, dest, on_progress: on_progress)
+          download_once(src, dest, on_progress: on_progress)
           dest
         else
           path = File.expand_path(src)
           raise Error, "zip not found: #{path}" unless File.file?(path)
           path
         end
-      end
-
-      # Download url → dest file, retrying once on the secondary CDN host when
-      # the primary fails (same path/query). Both hosts serve the same backend,
-      # so ActiveStorage signed_ids resolve identically on either.
-      private def download(url, dest, on_progress: nil)
-        download_once(url, dest, on_progress: on_progress)
-      rescue Error
-        fallback = secondary_url(url)
-        raise unless fallback
-        download_once(fallback, dest, on_progress: on_progress)
-      end
-
-      private def secondary_url(url)
-        return nil unless url.start_with?(PlatformHttpClient::PRIMARY_HOST)
-
-        url.sub(PlatformHttpClient::PRIMARY_HOST, PlatformHttpClient::SECONDARY_HOST)
       end
 
       # OpenURI's block form (`URI.open(url) { |io| ... }`) buffers the entire
@@ -302,8 +285,8 @@ module Clacky
         end
       rescue Net::OpenTimeout, Net::ReadTimeout => e
         raise Error, "download timed out: #{e.message}"
-      # Catch-all so any transport-layer failure triggers download()'s
-      # secondary-host fallback instead of surfacing a raw error.
+      # Catch-all so any transport-layer failure surfaces as a packaged Error
+      # instead of a raw exception.
       rescue StandardError => e
         raise Error, "failed to download #{url}: #{e.message}"
       end
