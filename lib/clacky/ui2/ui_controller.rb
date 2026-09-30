@@ -1880,8 +1880,7 @@ module Clacky
           choices = []
 
           # Add model list
-          current_config.models.each_with_index do |model, idx|
-            is_current = (idx == current_config.current_model_index)
+          current_config.chat_models.each do |model|
             model_name = model["model"] || "unnamed"
             masked_key = mask_api_key(model["api_key"])
 
@@ -1998,7 +1997,7 @@ module Clacky
       # @return [Hash, nil] { model_id:, model_name: } where model_name is the
       #   chosen sub-model (nil = the card's own default), or nil if cancelled.
       public def show_model_switch_modal(current_config, submodels_for)
-        return nil if current_config.models.empty?
+        return nil if current_config.chat_models.empty?
 
         on_close = -> { @layout.rerender_all }
 
@@ -2029,8 +2028,9 @@ module Clacky
       private def show_model_card_level(current_config, submodels_for, on_close)
         current_overlay = current_config.session_model_overlay_name
 
-        choices = current_config.models.each_with_index.map do |model, idx|
-          is_current = (idx == current_config.current_model_index)
+        current_id = current_config.current_model&.dig("id")
+        choices = current_config.chat_models.map do |model|
+          is_current = (model["id"] == current_id)
           card_model = model["model"] || "unnamed"
           type_badge = case model["type"]
                        when "default" then " [default]"

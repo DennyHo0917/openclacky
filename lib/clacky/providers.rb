@@ -806,6 +806,9 @@ module Clacky
 
     MEDIA_KINDS = %w[image video audio stt video_understanding].freeze
 
+    # Sidecar `type` values: capability configs that are not chat models.
+    SIDECAR_KINDS = (MEDIA_KINDS + ["ocr"]).freeze
+
     # Per-model maximum output token limits.
     #
     # The Agent global default (@max_tokens = 16_384) is tuned for the lowest

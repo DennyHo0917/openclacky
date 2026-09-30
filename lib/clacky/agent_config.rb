@@ -601,9 +601,27 @@ module Clacky
       true
     end
 
-    # List all model names
+    # Model entries the user can actually chat with.
+    #
+    # `type` doubles as a record discriminator: `default`/`lite` tag a chat
+    # model's role, while the media/ocr kinds mark sidecar capability configs
+    # that only the dedicated media UI should surface. Every model switcher
+    # (CLI, IM, Web UI) must go through here so the rule lives in one place.
+    def chat_models
+      @models.select { |m| self.class.chat_model?(m) }
+    end
+
+    # @param entry [Hash, nil]
+    def self.chat_model?(entry)
+      return false unless entry
+      return false if entry["auto_injected"]
+
+      !Clacky::Providers::SIDECAR_KINDS.include?(entry["type"].to_s)
+    end
+
+    # List all chat model names
     def model_names
-      @models.map { |m| m["model"] }
+      chat_models.map { |m| m["model"] }
     end
 
     # Get API key for current model

@@ -615,7 +615,7 @@ module Clacky
       end
 
       def switch_model_by_index(adapter, chat_id, agent, idx)
-        models = agent.config.models
+        models = agent.config.chat_models
         if idx < 0 || idx >= models.length
           adapter.send_text(chat_id, "Invalid number. Use /model to see available cards.")
           return

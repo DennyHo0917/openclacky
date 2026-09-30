@@ -173,7 +173,8 @@ module Clacky
       end
 
       def config_menu_choices(current_config)
-        choices = current_config.models.each_with_index.map do |model, index|
+        current_id = current_config.current_model&.dig("id")
+        choices = current_config.chat_models.map do |model|
           type_badge = case model["type"]
                        when "default" then "[default] "
                        when "lite" then "[lite] "
@@ -182,7 +183,7 @@ module Clacky
           {
             label: "#{type_badge}#{model["model"] || "unnamed"} (#{mask_api_key(model["api_key"])})",
             value: { action: :switch, model_id: model["id"] },
-            current: index == current_config.current_model_index
+            current: model["id"] == current_id
           }
         end
 
