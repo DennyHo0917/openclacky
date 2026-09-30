@@ -7132,7 +7132,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
-.btn-settings-action:hover { background: var(--color-bg-hover); border-color: var(--color-accent-primary); }
+.btn-settings-action:hover { border-color: var(--color-accent-primary); }
 .btn-settings-action:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .settings-network {
@@ -7223,7 +7223,6 @@ body {
   white-space: nowrap;
 }
 .btn-settings-link:hover {
-  background: var(--color-bg-hover);
   border-color: var(--color-accent-primary);
 }
 .backup-actions {
