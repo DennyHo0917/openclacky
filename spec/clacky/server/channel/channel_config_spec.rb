@@ -115,7 +115,46 @@ RSpec.describe Clacky::ChannelConfig do
     end
   end
 
+  describe "#progress_cards_enabled?" do
+    it "defaults to true" do
+      expect(described_class.new(channels: {}).progress_cards_enabled?).to be true
+    end
+
+    it "stays on for existing configs that never set the key" do
+      with_temp_channels_file do |file|
+        File.write(file, YAML.dump({ "status_messages" => true, "channels" => {} }))
+        expect(described_class.load(file).progress_cards_enabled?).to be true
+      end
+    end
+
+    it "is false only when explicitly set to false" do
+      expect(described_class.new(channels: {}, progress_cards: false).progress_cards_enabled?).to be false
+      expect(described_class.new(channels: {}, progress_cards: nil).progress_cards_enabled?).to be true
+    end
+  end
+
+  describe "#set_progress_cards" do
+    it "round-trips false through save/load" do
+      with_temp_channels_file do |file|
+        config = described_class.new(channels: { "feishu" => { "enabled" => true } })
+        config.set_progress_cards(false)
+        config.save(file)
+
+        expect(YAML.safe_load(File.read(file))["progress_cards"]).to be false
+        expect(described_class.load(file).progress_cards_enabled?).to be false
+      end
+    end
+  end
+
   describe "#deep_copy" do
+    it "copies the progress cards flag independently of the original" do
+      config = described_class.new(channels: {}, progress_cards: false)
+      copy   = config.deep_copy
+      copy.set_progress_cards(true)
+      expect(config.progress_cards_enabled?).to be false
+      expect(copy.progress_cards_enabled?).to be true
+    end
+
     it "copies the status flag independently of the original" do
       config = described_class.new(channels: {}, status_messages: false)
       copy   = config.deep_copy
