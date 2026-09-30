@@ -5696,11 +5696,11 @@ body {
   margin-bottom: 0.3125rem;
 }
 .sib-reasoning-option:hover {
-  background: color-mix(in srgb, var(--color-bg-hover) 60%, transparent);
+  background: var(--color-bg-hover);
   color: var(--color-accent-primary);
 }
 .sib-reasoning-option.current {
-  background: color-mix(in srgb, var(--color-bg-hover) 60%, transparent);
+  background: var(--color-bg-hover);
   font-weight: 500;
 }
 .sib-model-dropdown {
@@ -5728,12 +5728,14 @@ body {
   gap: 0.375rem;
   min-width: 0;
 }
+/* Full --color-bg-hover, not a 60% mix: these rows sit on a white popover and
+   the diluted fill was invisible there. */
 .sib-model-option:hover {
-  background: color-mix(in srgb, var(--color-bg-hover) 60%, transparent);
+  background: var(--color-bg-hover);
   color: var(--color-accent-primary);
 }
 .sib-model-option.current {
-  background: color-mix(in srgb, var(--color-bg-hover) 60%, transparent);
+  background: var(--color-bg-hover);
   font-weight: 500;
 }
 .sib-model-option .model-badge {
@@ -5832,7 +5834,7 @@ body {
 }
 
 .sib-model-option.submodel-open {
-  background: color-mix(in srgb, var(--color-bg-hover) 60%, transparent);
+  background: var(--color-bg-hover);
 }
 
 .sib-submodel-panel {
@@ -16020,6 +16022,18 @@ body.setup-mode {
   margin-top: 0.5rem;
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast);
+  /* Sticks 8px below the scrollport edge (a flush row reads as cramped), so the
+     band above it has to be painted or scrolled sessions show through. */
+  top: 0.5rem;
+}
+#projects-section-header::before {
+  content: "";
+  position: absolute;
+  top: -0.5rem;
+  left: 0;
+  right: 0;
+  height: 0.5rem;
+  background: var(--color-bg-primary);
 }
 #projects-section-header:hover {
   background: var(--color-bg-hover);
