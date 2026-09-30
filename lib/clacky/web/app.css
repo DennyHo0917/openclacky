@@ -12238,7 +12238,15 @@ body.setup-mode {
 }
 
 /* ── Channel list: two-column rows, same rhythm as the extensions page ─── */
-.channel-setting-row:hover { background: none; }
+/* Message-settings blocks are outlined so they read apart from platform rows. */
+.channel-setting-row {
+  border: 1px solid var(--color-border-primary);
+  border-radius: 10px;
+  background: var(--color-bg-secondary);
+  transition: background .15s, border-color .15s;
+}
+.channel-setting-row:hover { background: var(--color-bg-hover); border-color: transparent; }
+.channel-group:has(.channel-setting-row) .channel-rows { gap: 0.5rem 1rem; }
 /* Keeps setting toggles in the same column as channel toggles, which have a ⋯ button after them. */
 .channel-row-btn-spacer { width: 1.75rem; flex-shrink: 0; }
 .channel-group-title {
@@ -12281,6 +12289,10 @@ body.setup-mode {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Descriptions on the channels page sit one tier lighter than body text. */
+#channels-body .channel-row-desc {
+  color: var(--color-text-tertiary);
 }
 .channel-row-action {
   flex-shrink: 0;
