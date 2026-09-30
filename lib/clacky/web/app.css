@@ -3071,6 +3071,7 @@ body {
    column collapses to zero width. */
 #session-aside {
   --session-aside-width: 16rem;
+  --aside-tabbar-actions-width: 78px;
   width: var(--session-aside-width);
   flex-shrink: 0;
   position: relative;
@@ -3117,6 +3118,7 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
+  width: var(--aside-tabbar-actions-width);
   height: 40px;
   display: flex;
   align-items: center;
@@ -3155,14 +3157,44 @@ body {
 
 .session-aside-slot { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Tab bar (rendered by Clacky.ext). Leaves room on the right for the
-   fullscreen + collapse buttons docked by the host over that end. */
-.aside-tabs {
+/* Tab bar (rendered by Clacky.ext). Neutral edge fades reveal when more tabs
+   are available in either direction without competing with the active color. */
+.aside-tabs-frame {
+  position: relative;
   flex: none;
+  height: 40px;
+}
+.aside-tabs-frame::before,
+.aside-tabs-frame::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  z-index: 10;
+  width: 42px;
+  height: 39px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+.aside-tabs-frame::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-bg-secondary), transparent);
+}
+.aside-tabs-frame::after {
+  right: var(--aside-tabbar-actions-width);
+  background: linear-gradient(to left, var(--color-bg-secondary), transparent);
+}
+.aside-tabs-frame.can-scroll-left::before,
+.aside-tabs-frame.can-scroll-right::after { opacity: 1; }
+
+/* Leaves room on the right for the fullscreen + collapse buttons docked by
+   the host over that end. */
+.aside-tabs {
   display: flex;
   align-items: stretch;
+  width: 100%;
   height: 40px;
-  padding: 0 78px 0 4px;
+  padding: 0 var(--aside-tabbar-actions-width) 0 4px;
   gap: 2px;
   border-bottom: 1px solid var(--color-border-primary);
   overflow-x: auto;

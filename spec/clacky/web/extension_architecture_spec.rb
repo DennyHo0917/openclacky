@@ -60,6 +60,18 @@ RSpec.describe "WebUI extension architecture" do
           "ext.js must not reference host module #{host_global} directly"
       end
     end
+
+    it "marks tab-strip overflow in both directions for a neutral edge cue" do
+      styles = File.read(File.join(web_dir, "app.css"))
+
+      expect(ext_js).to include('tabFrame.classList.toggle("can-scroll-left"')
+      expect(ext_js).to include('tabFrame.classList.toggle("can-scroll-right"')
+      expect(ext_js).to include("tabBar.scrollWidth - tabBar.clientWidth")
+      expect(styles).to include(".aside-tabs-frame.can-scroll-left::before")
+      expect(styles).to include(".aside-tabs-frame.can-scroll-right::after")
+      expect(styles).to include("linear-gradient(to left, var(--color-bg-secondary), transparent)")
+      expect(styles.scan("var(--aside-tabbar-actions-width)").length).to be >= 3
+    end
   end
 
   # ─── store/view layering discipline ─────────────────────────────────────────
