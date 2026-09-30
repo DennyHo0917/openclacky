@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [1.5.17] - 2026-09-30
+
+### Added
+- Show a top-up action when a free-trial model rejects the request
+- Add Requesty as a named provider preset (#587 - @Thibaultjaigu)
+- Redesign the skills page around cards and a detail view
+- Redesign the scheduled tasks page and keep a run history per task
+- Redesign the channels page as a compact two-column list
+- Rework the MCP page layout, its row menu and the remove confirmation
+- Add "Add to chat" to the workspace file context menu
+- Add a global switch for IM progress cards (#599)
+- Show the vendor logo on the model chip of a new session
+- Use Chinese names for the built-in skills
+
+### Improved
+- Optimize the Feishu card styling (#597)
+- Improve drag-and-drop for session references and files (#600)
+- Restyle the channel status badge, cron rows, message settings and search boxes
+- Polish the assistant memory page, onboarding page, billing header and trash toolbar
+- Improve the discoverability of overflowing aside tabs (#601)
+- Show skill, MCP and task errors as in-app toasts instead of browser alerts
+- Localize the default extension icon letter
+- Ship meeting as a default-off extension
+
+### Fixed
+- Make an IM message interrupt the running task instead of queueing silently (#586)
+- Hide the sidecar models from the model switchers (#598)
+- Show the "View process" panel in Feishu only when there is process history (#596)
+- Keep a subagent phase running when a message is queued (#594)
+- Fix the skill install click and the extension installed state
+- Strip channel-only prompt prefixes when replaying history (#585)
+- Use the in-app dialog for delete confirmations instead of the browser prompt
+- Toggle a sidebar ··· menu on a repeated click (#595)
+- Hide the auto tag and routing tooltip once the alias is pinned to a model
+
+### More
+- Retire Claude 4.5 / Opus 4.6 and Gemini 3.5 / 3.6 Flash from the catalogs
+- Remove legacy fallback domains and dead failover paths
+
 ## [1.5.16] - 2026-09-24
 
 ### Added
