@@ -2244,7 +2244,7 @@ body {
 }
 .tasks-search {
   width: 100%;
-  height: 2.15rem;
+  height: 2.05rem;
   padding: 0 0.625rem 0 2rem;
   font-size: 0.875rem;
   border-radius: 6px;
@@ -9271,7 +9271,7 @@ button:focus-visible { outline: 2px solid var(--color-accent-primary); outline-o
 }
 .skills-search {
   width: 100%;
-  height: 2.15rem;
+  height: 2.05rem;
   padding: 0 0.625rem 0 2rem;
   font-size: 0.875rem;
   border-radius: 6px;
@@ -9924,18 +9924,41 @@ button:focus-visible { outline: 2px solid var(--color-accent-primary); outline-o
   gap: 0.25rem;
   flex-shrink: 0;
 }
-.extensions-search {
+.extensions-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
   flex: 1;
   min-width: 15rem;
-  font-size: 0.8125rem;
-  padding: 0.5375rem 0.75rem;
+}
+.extensions-search-icon {
+  position: absolute;
+  left: 0.625rem;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+.extensions-search {
+  width: 100%;
+  height: 2.05rem;
+  padding: 0 0.625rem 0 2rem;
+  font-size: 0.875rem;
   border-radius: 6px;
   border: 1px solid var(--color-border-primary);
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.15s;
 }
+.extensions-search:focus { border-color: var(--color-accent-primary); }
+.extensions-search::placeholder { color: var(--color-text-tertiary); }
 .extensions-select {
   width: auto;
+}
+/* Match .extensions-search so the sort button lines up with the search box. */
+.extensions-select .custom-select-trigger {
+  height: 2.05rem;
+  padding: 0 0.625rem;
 }
 #extensions-list {
   display: flex;
