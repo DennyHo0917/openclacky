@@ -2769,9 +2769,12 @@ module Clacky
             ext.merge(
               # Same as the public catalog: `id` is the store's row id, while
               # uninstall/enable need the slug the extension was installed as.
+              # Installed state comes from the local disk scan — the platform's
+              # own record lags behind a fresh install, which left freshly
+              # installed brand extensions still showing the install button.
               "slug"              => slug,
-              "installed"         => !ext["installed_version"].nil?,
-              "installed_version" => ext["installed_version"],
+              "installed"         => !container.nil?,
+              "installed_version" => container&.dig(:version) || ext["installed_version"],
               **local_overrides
             )
           end

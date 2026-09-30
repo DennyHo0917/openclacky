@@ -9839,6 +9839,12 @@ button:focus-visible { outline: 2px solid var(--color-accent-primary); outline-o
 #brand-skills-list {
   padding-top: 1.25rem;
 }
+
+/* The brand skills tab has no top padding of its own, so without this the
+   notice would sit flush against the tab bar. */
+#brand-skills-warning {
+  margin-top: 1.25rem;
+}
 .brand-skills-loading,
 .brand-skills-empty,
 .brand-skills-error {
@@ -9882,15 +9888,22 @@ button:focus-visible { outline: 2px solid var(--color-accent-primary); outline-o
   color: #fff;
 }
 
-/* Soft warning banner — shown when remote API is unavailable but local skills are displayed */
-.brand-skills-warning {
+/* Inline notice bar — shared by the skills and extensions panels. Remote
+   failures (unreachable license server / marketplace) are errors, so they
+   render with the error palette instead of the warning one. */
+.inline-notice {
   font-size: 0.75rem;
-  color: #9e6a03;
-  background: #2d2208;
-  border: 1px solid #4d3800;
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 0.375rem 0.75rem;
   margin-bottom: 0.625rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.inline-notice--error {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
 }
 
 /* ── Extension Market ─────────────────────────────────────────────────── */
