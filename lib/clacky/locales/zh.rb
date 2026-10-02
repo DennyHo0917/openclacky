@@ -20,7 +20,7 @@ module Clacky
       "llm.error.server_error"          => "服务暂时不可用（%<status>d），正在重试...",
       "llm.error.unexpected"            => "请求失败（%<status>d）",
       "llm.error.html_response"         => "服务暂时不可用（收到 HTML 错误页），正在重试...",
-      "llm.error.bad_request"           => "请求参数有误，请检查模型配置或重试",
+      "llm.error.bad_request"           => "请求模型出错，请暂时切换其他模型重试",
       "llm.error.request_timeout"       => "请求超时（已重试 %<retries>d 次）",
       "llm.error.network_failed"        => "网络连接失败（已重试 %<retries>d 次）",
       "llm.error.service_unavailable"   => "服务暂时不可用（已重试 %<retries>d 次）",

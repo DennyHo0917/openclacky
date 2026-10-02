@@ -20,7 +20,7 @@ module Clacky
       "llm.error.server_error"          => "Service temporarily unavailable (%<status>d), retrying...",
       "llm.error.unexpected"            => "Unexpected error (%<status>d)",
       "llm.error.html_response"         => "Service temporarily unavailable (received HTML error page), retrying...",
-      "llm.error.bad_request"           => "Bad request: invalid parameters. Please check your model configuration",
+      "llm.error.bad_request"           => "Model request failed. Please switch to another model and retry",
       "llm.error.request_timeout"       => "Request timed out after %<retries>d retries",
       "llm.error.network_failed"        => "Network connection failed after %<retries>d retries",
       "llm.error.service_unavailable"   => "Service unavailable after %<retries>d retries",
