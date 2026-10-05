@@ -3,7 +3,7 @@
 ## Task lifecycle: on_start / on_complete
 
 > Availability: the additional context and abnormal completion paths require
-> the runtime change on branch `codex/session-lifecycle-hooks`. They are not
+> the runtime change on branch `session-lifecycle-hooks`. They are not
 > available in 1.5.16. Upgrade the runtime before relying on these fields.
 
 Use the existing events without extra configuration. `on_start` runs after task
