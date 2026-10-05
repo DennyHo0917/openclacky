@@ -59,6 +59,24 @@ RSpec.describe Clacky::ShellHookLoader do
       expect(ui).to have_received(:show_warning).with("blocked start")
     end
 
+    it "keeps completion JSON free of Agent and context and ignores denial" do
+      out = File.join(tmp, "complete_payload.json")
+      script = make_script("cat > '#{out}'\nexit 2")
+      write_yml(<<~YAML)
+        hooks:
+          on_complete:
+            - command: "#{script}"
+      YAML
+      hm = build_hm
+      hm.agent = Object.new
+      tail = []
+      hm.add(:on_complete) { tail << true }
+      expect(hm.trigger(:on_complete, { status: :cancelled },
+                        { session_id: "private-context" })).to eq(action: :allow)
+      expect(JSON.parse(File.read(out))).to eq("event" => "on_complete", "result" => {"status" => "cancelled"})
+      expect(tail).to eq([true])
+    end
+
     it "returns empty when the file is absent" do
       result = described_class.load_into(Clacky::HookManager.new, path: File.join(tmp, "none.yml"))
       expect(result.registered).to be_empty

@@ -26,20 +26,27 @@ module Clacky
 
     # @return [Hash] `{action: :allow}`, `{action: :deny, reason:}`, or
     #   `{action: :handled, result:}` when a hook fulfilled the event itself.
-    # on_start receives (user_input, agent) after task/history initialization.
+    # on_start receives (user_input, agent, context) after task/history initialization.
     # Its handled result is returned unchanged from Agent#run; the extension
     # supplies the run-result status and any queue/feedback flags it needs.
     # on_start is not fired for steering input inside an already running turn.
-    # Extra trailing arg: the agent that owns this hook chain, so ext hooks can
+    # The agent follows the event payload, so ext hooks can
     # call `agent.emit_event(...)`. Blocks are procs — those declaring fewer
-    # params (`|call|`, `|call, result|`) silently ignore it.
+    # params (`|call|`, `|call, result|`) silently ignore extra arguments.
+    # Start/complete append context after the agent. Completion is observation-only.
     def trigger(event, *args)
       validate_event!(event)
+      # Keep payload hashes positional: Ruby 2.6 otherwise promotes their keys
+      # into keyword arguments, breaking existing tool hooks.
+      context = args.pop if [:on_start, :on_complete].include?(event) && args.length == 2
       result = { action: :allow }
 
       @hooks[event].each do |hook|
         begin
-          hook_result = hook.call(*args, @agent)
+          callback_args = [*args, @agent]
+          callback_args << context.dup if context
+          hook_result = hook.call(*callback_args)
+          next if event == :on_complete
           next unless hook_result.is_a?(Hash)
           # First deny wins and stops the chain: a weaker later verdict must
           # never clobber a stronger earlier one, and the first deny's reason
