@@ -582,7 +582,8 @@ module Clacky
         Unit.new(kind: :hook, id: "#{spec['event']}/#{File.basename(spec['file'], '.rb')}", ext_id: ext_id,
                  layer: container[:layer], origin: container[:origin],
                  dir: container[:dir],
-                 spec: { "event" => spec["event"].to_s, "file" => spec["file"], "file_abs" => file_abs })
+                 spec: { "event" => spec["event"].to_s, "scope" => spec.fetch("scope", "default"),
+                         "file" => spec["file"], "file_abs" => file_abs })
       end
 
       private def build_tool_unit(container, spec, errors)

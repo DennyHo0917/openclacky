@@ -9,8 +9,6 @@ module Clacky
       :on_start,
       :on_complete,
       :on_iteration,
-      :on_user_input,
-      :on_session_state,
       :session_rollback
     ].freeze
 
@@ -18,12 +16,14 @@ module Clacky
 
     def initialize(agent: nil)
       @hooks = Hash.new { |h, k| h[k] = [] }
+      @lifecycle_hooks = Hash.new { |h, k| h[k] = [] }
       @agent = agent
     end
 
-    def add(event, &block)
+    def add(event, scope: :default, &block)
       validate_event!(event)
-      @hooks[event] << block
+      validate_scope!(event, scope)
+      (scope.to_sym == :lifecycle ? @lifecycle_hooks : @hooks)[event] << block
     end
 
     # @return [Hash] `{action: :allow}`, `{action: :deny, reason:}`, or
@@ -42,7 +42,6 @@ module Clacky
       @hooks[event].each do |hook|
         begin
           hook_result = hook.call(*args, @agent)
-          next if [:on_user_input, :on_session_state].include?(event)
           next unless hook_result.is_a?(Hash)
           # First deny wins and stops the chain: a weaker later verdict must
           # never clobber a stronger earlier one, and the first deny's reason
@@ -65,16 +64,37 @@ module Clacky
       result
     end
 
+    # Opt-in server observations never join the legacy control hook chain.
+    def notify_lifecycle(event, value, context)
+      validate_scope!(event, :lifecycle)
+      @lifecycle_hooks[event].each do |hook|
+        begin
+          hook.call(value, @agent, context.dup)
+        rescue StandardError => e
+          Clacky::Logger.error("Hook error", event: event, error: e)
+        end
+      end
+      nil
+    end
+
+    def validate_scope!(event, scope)
+      return if scope.to_s == "default"
+      return if scope.to_s == "lifecycle" && [:on_start, :on_complete].include?(event)
+      raise ArgumentError, "Invalid hook scope #{scope.inspect} for #{event}"
+    end
+
     def has_hooks?(event)
-      @hooks[event].any?
+      @hooks[event].any? || @lifecycle_hooks[event].any?
     end
 
     def clear(event = nil)
       if event
         validate_event!(event)
         @hooks[event].clear
+        @lifecycle_hooks[event].clear
       else
         @hooks.clear
+        @lifecycle_hooks.clear
       end
     end
 

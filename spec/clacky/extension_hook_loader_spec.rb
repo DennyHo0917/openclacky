@@ -98,4 +98,52 @@ RSpec.describe Clacky::ExtensionHookLoader do
     expect(result.registered).to be_empty
     expect(result.skipped.first[1]).to match(/boom/)
   end
+  it "loads lifecycle scope from the manifest without changing legacy callbacks" do
+    manifest = <<~YAML
+      id: lifecycle-pack
+      origin: self
+      contributes:
+        hooks:
+          - event: on_complete
+            scope: lifecycle
+            file: hooks/lifecycle.rb
+          - event: on_complete
+            file: hooks/legacy.rb
+    YAML
+    make_ext(local, "lifecycle-pack", manifest,
+      "hooks/lifecycle.rb" => 'Clacky::ExtensionHookRegistry.add { |result, agent, context| $lifecycle_seen << [result, agent, context] }',
+      "hooks/legacy.rb" => 'Clacky::ExtensionHookRegistry.add { |*args| $legacy_seen << args }')
+    reload_layers
+    expect(described_class.load_all.skipped).to be_empty
+    owner = Object.new
+    hm = Clacky::HookManager.new(agent: owner)
+    Clacky::ExtensionHookRegistry.apply_to(hm)
+    $legacy_seen, $lifecycle_seen = [], []
+    hm.trigger(:on_complete, {status: :success})
+    expect($legacy_seen).to eq([[{status: :success}, owner]])
+    expect($lifecycle_seen).to be_empty
+    hm.notify_lifecycle(:on_complete, {status: :error}, {status: "failed"})
+    expect($legacy_seen.size).to eq(1)
+    expect($lifecycle_seen).to eq([[{status: :error}, owner, {status: "failed"}]])
+  ensure
+    $legacy_seen = $lifecycle_seen = nil
+  end
+
+  it "rejects lifecycle scope on tool hooks instead of running it as a legacy hook" do
+    manifest = <<~YAML
+      id: invalid-scope-pack
+      origin: self
+      contributes:
+        hooks:
+          - event: before_tool_use
+            scope: lifecycle
+            file: hooks/noop.rb
+    YAML
+    make_ext(local, "invalid-scope-pack", manifest, "hooks/noop.rb" => 'raise "must not load"')
+    reload_layers
+    result = described_class.load_all
+    expect(result.registered).to be_empty
+    expect(result.skipped.first[1]).to match(/Invalid hook scope/)
+  end
+
 end

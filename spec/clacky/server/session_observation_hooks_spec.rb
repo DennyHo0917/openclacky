@@ -20,7 +20,7 @@ RSpec.describe "Server session observation hooks" do
     registry.with_session("s") { |s| s[:agent] = agent }
     allow(registry).to receive(:evict_excess_idle!)
     [:broadcast_session_update, :broadcast_all, :broadcast].each { |method| allow(server).to receive(method) }
-    allow(agent).to receive(:notify_session_event) { |event, payload| events << [event, payload] }
+    allow(agent).to receive(:notify_session_lifecycle) { |event, _value, payload| events << [event, payload] }
   end
 
   def observations
@@ -36,7 +36,7 @@ RSpec.describe "Server session observation hooks" do
       rows = observations
       expect(rows.map { |_, data| data[:status] }).to eq(["running", expected])
       expect(rows.map { |_, data| data[:run_id] }.uniq).to eq(["1"])
-      expect(rows.all? { |event, data| event == :on_session_state && Time.iso8601(data[:observed_at]) }).to be(true)
+      expect(rows.all? { |event, data| [:on_start, :on_complete].include?(event) && Time.iso8601(data[:observed_at]) }).to be(true)
     end
   end
 
@@ -46,6 +46,18 @@ RSpec.describe "Server session observation hooks" do
       expect(worker.join(2)).not_to be_nil
       expect(observations.last[1][:status]).to eq(error.is_a?(Clacky::AgentInterrupted) ? "cancelled" : "failed")
     end
+  end
+
+  it "emits only a failed terminal observation when final persistence raises" do
+    store = server.instance_variable_get(:@session_manager)
+    calls = 0
+    allow(store).to receive(:save) do
+      calls += 1
+      raise "final save failed" if calls == 2
+    end
+    worker = server.send(:run_agent_task, "s", agent) { { status: :success } }
+    worker.join(2)
+    expect(observations.map { |_, data| data[:status] }).to eq(["running", "failed"])
   end
 
   it "does not let a superseded worker publish its terminal state" do
@@ -68,7 +80,7 @@ RSpec.describe "Server session observation hooks" do
       server.send(:handle_user_message, "s", "private content")
       rows = observations
       expect(rows.size).to eq(1)
-      expect(rows.first[0]).to eq(:on_user_input)
+      expect(rows.first[0]).to eq(:on_start)
       expect(rows.first[1][:source]).to eq("web")
       expect(rows.first[1]).not_to have_key(:content)
     end
@@ -92,7 +104,7 @@ RSpec.describe "Server session observation hooks" do
     worker = server.send(:handle_user_message, "s", "hello")
     worker.join(2)
     rows = observations
-    expect(rows.map(&:first)).to eq([:on_session_state, :on_user_input, :on_session_state])
+    expect(rows.map(&:first)).to eq([:on_start, :on_start, :on_complete])
   end
 
   it "does not report input accepted when server capacity rejects the run" do
@@ -108,10 +120,10 @@ RSpec.describe "Server session observation hooks" do
     real.instance_variable_set(:@session_id, "s")
     hooks = Clacky::HookManager.new(agent: real)
     real.instance_variable_set(:@hooks, hooks)
-    hooks.add(:on_session_state) { raise "broken observer" }
-    hooks.add(:on_session_state) { { action: :deny } }
-    hooks.add(:on_session_state) { |data, owner| events << [data, owner] }
-    real.notify_session_event(:on_session_state, status: "completed")
+    hooks.add(:on_complete, scope: :lifecycle) { raise "broken observer" }
+    hooks.add(:on_complete, scope: :lifecycle) { { action: :deny } }
+    hooks.add(:on_complete, scope: :lifecycle) { |_result, owner, data| events << [data, owner] }
+    real.notify_session_lifecycle(:on_complete, { status: :success }, status: "completed")
     data, owner = events.pop
     expect(data).to eq(session_id: "s", status: "completed")
     expect(owner).to be(real)

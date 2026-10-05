@@ -7786,7 +7786,7 @@ module Clacky
           end
         end
         if queued
-          notify_session_hook(session_id, session[:agent], :on_user_input, source: "web")
+          notify_session_hook(session_id, session[:agent], :on_start, value: content, phase: "input_accepted", source: "web")
           # The frontend renders the bubble optimistically; tell it to retract
           # the bubble — the message now lives in the queue panel and will be
           # re-rendered by run_pending_input on delivery.
@@ -7806,7 +7806,7 @@ module Clacky
             retained_created_at = Time.now.to_f
             session[:agent].enqueue_input(content, files: files, references_display: references,
                                           reference_contexts: build_reference_contexts(references), created_at: retained_created_at)
-            notify_session_hook(session_id, session[:agent], :on_user_input, source: "web")
+            notify_session_hook(session_id, session[:agent], :on_start, value: content, phase: "input_accepted", source: "web")
             broadcast(session_id, { type: "input_enqueued", session_id: session_id, created_at: retained_created_at })
             broadcast(session_id, { type: "input_queue_notice", session_id: session_id, key: "chat.input.stoppingDelayed" })
             return
@@ -7859,7 +7859,7 @@ module Clacky
         # message after the user message, so replay_history skips them automatically.
         reference_contexts = build_reference_contexts(references)
         run_agent_task(session_id, agent) do
-          notify_session_hook(session_id, agent, :on_user_input, source: "web")
+          notify_session_hook(session_id, agent, :on_start, value: content, phase: "input_accepted", source: "web")
           agent.run(content, files: files, reference_contexts: reference_contexts, created_at: msg_created_at, references_display: references)
         end
       end
@@ -8057,7 +8057,7 @@ module Clacky
         # @registry.exist? == false).
         epoch = @registry.claim_epoch(session_id)
         @registry.update(session_id, status: :running)
-        notify_session_hook(session_id, agent, :on_session_state, status: "running", run_id: epoch.to_s)
+        notify_session_hook(session_id, agent, :on_start, phase: "execution_started", status: "running", run_id: epoch.to_s)
 
         # evict_excess_idle! serializes + writes 1 file per evicted session
         # (can be 5+ on first message after a restart when restore_from_disk
@@ -8102,7 +8102,6 @@ module Clacky
                   else
                     "completed"
                   end
-          notify_session_hook(session_id, agent, :on_session_state, status: state, run_id: epoch.to_s)
           broadcast_session_update(session_id)
           # Transient global signal for the optional task-complete sound. Sent to
           # all clients (broadcast_all) so a browser viewing another session — or
@@ -8114,6 +8113,7 @@ module Clacky
           @session_manager.save(agent.to_session_data(status: :success, updated_at: Time.now))
           # Start idle compression timer now that the agent is idle
           idle_timer&.start
+          notify_session_hook(session_id, agent, :on_complete, value: run_result, phase: "settled", status: state, run_id: epoch.to_s)
         rescue Clacky::AgentInterrupted
           # Persist the interrupted history snapshot unconditionally: it carries
           # this agent's own turns (including fan-out subagent trails flushed on
@@ -8124,7 +8124,7 @@ module Clacky
           # A superseding task already owns the session — do not touch status
           # or push UI events, they belong to the new epoch now.
           next unless @registry.update_if_epoch(session_id, epoch, status: :idle)
-          notify_session_hook(session_id, agent, :on_session_state, status: "cancelled", run_id: epoch.to_s, reason: (Thread.current[:interrupt_reason] || :user).to_s)
+          notify_session_hook(session_id, agent, :on_complete, value: { status: :cancelled }, phase: "settled", status: "cancelled", run_id: epoch.to_s, reason: (Thread.current[:interrupt_reason] || :user).to_s)
           broadcast_session_update(session_id)
           broadcast(session_id, { type: "interrupted", session_id: session_id,
                                   reason: Thread.current[:interrupt_reason] || :user })
@@ -8141,7 +8141,7 @@ module Clacky
           user_message = e.respond_to?(:display_message) && e.display_message ? e.display_message : e.message
           raw_message  = e.respond_to?(:raw_message) ? e.raw_message : nil
           next unless @registry.update_if_epoch(session_id, epoch, status: :error, error: user_message, error_code: code, top_up_url: top_up_url, raw_message: raw_message)
-          notify_session_hook(session_id, agent, :on_session_state, status: "failed", run_id: epoch.to_s, error_code: code)
+          notify_session_hook(session_id, agent, :on_complete, value: { status: :error, error_code: code }, phase: "settled", status: "failed", run_id: epoch.to_s, error_code: code)
           broadcast_session_update(session_id)
           web_ui&.show_error(user_message, code: code, top_up_url: top_up_url, raw_message: raw_message)
           @session_manager.save(agent.to_session_data(status: :error, error_message: user_message, raw_message: raw_message, updated_at: Time.now))
@@ -8154,12 +8154,12 @@ module Clacky
 
       # Called outside the registry lock: extensions may read session state.
       # Observations are best-effort and never gate a task or WebSocket delivery.
-      private def notify_session_hook(session_id, agent, event, **payload)
-        return unless agent.respond_to?(:notify_session_event)
+      private def notify_session_hook(session_id, agent, event, value: nil, **payload)
+        return unless agent.respond_to?(:notify_session_lifecycle)
         epoch = Thread.current[:task_epoch]
         return if epoch && @registry.current_epoch(session_id) != epoch
 
-        agent.notify_session_event(event, payload.merge(observed_at: Time.now.utc.iso8601(6)))
+        agent.notify_session_lifecycle(event, value, payload.merge(observed_at: Time.now.utc.iso8601(6)))
       end
 
       # ── WebSocket subscription management ─────────────────────────────────────

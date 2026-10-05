@@ -204,18 +204,15 @@ module Clacky
       agent
     end
 
-    def add_hook(event, &block)
-      @hooks.add(event, &block)
+    def add_hook(event, scope: :default, &block)
+      @hooks.add(event, scope: scope, &block)
     end
 
-    # Server lifecycle observations are independent of run-level control hooks.
-    # No history, message content, or extension delivery state is persisted here.
-    def notify_session_event(event, payload)
+    # Lifecycle scope is separate from run-level control hooks; old subscribers
+    # retain their existing arguments, timing, and short-circuit semantics.
+    def notify_session_lifecycle(event, value, context)
       return if @is_subagent
-      unless [:on_user_input, :on_session_state].include?(event)
-        raise ArgumentError, "Not a session observation: #{event}"
-      end
-      @hooks.trigger(event, payload.merge(session_id: @session_id))
+      @hooks.notify_lifecycle(event, value, context.merge(session_id: @session_id))
     end
 
     # Switch this session to a different model, identified by its stable
