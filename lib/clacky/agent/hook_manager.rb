@@ -34,8 +34,11 @@ module Clacky
     # call `agent.emit_event(...)`. Blocks are procs — those declaring fewer
     # params (`|call|`, `|call, result|`) silently ignore extra arguments.
     # Start/complete append context after the agent. Completion is observation-only.
-    def trigger(event, *args, context: nil)
+    def trigger(event, *args)
       validate_event!(event)
+      # Keep payload hashes positional: Ruby 2.6 otherwise promotes their keys
+      # into keyword arguments, breaking existing tool hooks.
+      context = args.pop if [:on_start, :on_complete].include?(event) && args.length == 2
       result = { action: :allow }
 
       @hooks[event].each do |hook|

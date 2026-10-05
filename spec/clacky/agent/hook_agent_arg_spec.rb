@@ -27,6 +27,29 @@ RSpec.describe Clacky::HookManager, "agent argument" do
     expect(seen).to be(agent)
   end
 
+  it "preserves empty and context-named Hash payloads as positional tool data" do
+    [{}, { context: "tool-owned", name: "write" }].each do |payload|
+      seen = nil
+      manager.clear
+      manager.add(:before_tool_use) { |value, owner| seen = [value, owner] }
+      manager.trigger(:before_tool_use, payload)
+      expect(seen[0]).to equal(payload)
+      expect(seen[1]).to equal(agent)
+    end
+  end
+
+  it "appends lifecycle context after the agent without changing Hash results" do
+    result = { status: :success }
+    context = { status: "completed", run_id: "1" }
+    seen = nil
+    manager.add(:on_complete) { |value, owner, metadata| seen = [value, owner, metadata] }
+    manager.trigger(:on_complete, result, context)
+    expect(seen[0]).to equal(result)
+    expect(seen[1]).to equal(agent)
+    expect(seen[2]).to eq(context)
+    expect(seen[2]).not_to equal(context)
+  end
+
   it "leaves hooks that declare fewer params untouched" do
     seen = nil
     manager.add(:after_tool_use) { |c, result| seen = [c, result] }

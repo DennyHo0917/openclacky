@@ -72,7 +72,7 @@ RSpec.describe Clacky::ShellHookLoader do
       tail = []
       hm.add(:on_complete) { tail << true }
       expect(hm.trigger(:on_complete, { status: :cancelled },
-                        context: { session_id: "private-context" })).to eq(action: :allow)
+                        { session_id: "private-context" })).to eq(action: :allow)
       expect(JSON.parse(File.read(out))).to eq("event" => "on_complete", "result" => {"status" => "cancelled"})
       expect(tail).to eq([true])
     end

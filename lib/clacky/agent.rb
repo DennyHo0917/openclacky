@@ -595,7 +595,7 @@ module Clacky
       notify_input_queue
       # The task and user history already exist. A terminal verdict skips the
       # loop; ensure still reports completion and cleans up this started turn.
-      hook_result = @hooks.trigger(:on_start, user_input, context: run_context)
+      hook_result = @hooks.trigger(:on_start, user_input, run_context)
       case hook_result[:action]
       when :deny
         run_context[:reason] = "hook_denied"
@@ -921,7 +921,7 @@ module Clacky
       # but completion observers must never interpret it as a successful run.
       notification = cancelled ? result.merge(status: :cancelled) : result
       @hooks.trigger(:on_complete, notification,
-                     context: context.merge(status: status, observed_at: Time.now.utc.iso8601(6)))
+                     context.merge(status: status, observed_at: Time.now.utc.iso8601(6)))
     end
 
     # Shared by initial input and steering; only the execution thread writes history.
