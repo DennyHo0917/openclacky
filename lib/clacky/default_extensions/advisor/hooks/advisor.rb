@@ -127,7 +127,7 @@ module Clacky
       # rounds with no tool calls at all (e.g. the very first "hi"). The
       # pending event is emitted synchronously so the UI can show a "working"
       # state immediately instead of the card popping in out of nowhere.
-      def finish_run
+      def finish_run(analyze: true)
         snapshot = @mutex.synchronize do
           snap = {
             tools: @tools_this_run,
@@ -139,6 +139,7 @@ module Clacky
           @tools_this_run = 0
           snap
         end
+        return unless analyze
         Clacky::Logger.info("[Advisor] finish_run",
                             session: @agent.session_id.to_s,
                             tools: snapshot[:tools],

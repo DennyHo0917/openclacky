@@ -179,7 +179,9 @@ module Clacky
       # HookManager appends the owning agent as a trailing arg; shell hooks
       # serialize their args to JSON, so drop it before building the payload.
       hook_manager.add(event) do |*args|
-        run_command(event, command, timeout, args[0..-2])
+        # Start/complete append context after the agent; other hooks do not.
+        values = [:on_start, :on_complete].include?(event) && args.length == 3 ? args[0...-2] : args[0...-1]
+        run_command(event, command, timeout, values)
       end
       result.registered << [event, name]
     end

@@ -66,13 +66,17 @@ RSpec.describe Clacky::Agent, "on_start hook control" do
       expect(later).not_to receive(:call)
       agent.add_hook(:on_start) { later.call }
       agent.add_hook(:on_iteration) { later.call }
-      agent.add_hook(:on_complete) { later.call }
+      completions = []
+      agent.add_hook(:on_complete) { |value, _owner, context| completions << [value, context] }
       expect(agent).not_to receive(:maybe_continue_goal)
 
       result = agent.run("request")
 
       expect(result).to include(status: :success, queue_paused: true)
       expect(result).to equal(replacement) if action == :handled
+      expect(completions.size).to eq(1)
+      expect(completions.first[1][:status]).to eq(action == :deny ? "cancelled" : "awaiting_user")
+      expect(completions.first[0][:status]).to eq(action == :deny ? :cancelled : :success)
       if action == :deny
         expect(result).to include(task_id: user_messages.first[:task_id], iterations: 0)
         expect(ui).to have_received(:show_warning).with("blocked")

@@ -204,15 +204,8 @@ module Clacky
       agent
     end
 
-    def add_hook(event, scope: :default, &block)
-      @hooks.add(event, scope: scope, &block)
-    end
-
-    # Lifecycle scope is separate from run-level control hooks; old subscribers
-    # retain their existing arguments, timing, and short-circuit semantics.
-    def notify_session_lifecycle(event, value, context)
-      return if @is_subagent
-      @hooks.notify_lifecycle(event, value, context.merge(session_id: @session_id))
+    def add_hook(event, &block)
+      @hooks.add(event, &block)
     end
 
     # Switch this session to a different model, identified by its stable
@@ -497,6 +490,8 @@ module Clacky
       # method-level and must be able to reference them on any exit path.
       result = nil
       run_turn_started = false
+      completion_sent = false
+      run_context = nil
 
       # Intercept /goal ... commands before any task/LLM work. Control-plane
       # commands (status/pause/resume/clear) return immediately without a turn;
@@ -527,6 +522,9 @@ module Clacky
 
       # Start new task for Time Machine
       task_id = start_new_task(title: display_text.to_s.empty? ? user_input.to_s : display_text.to_s)
+      run_context = { session_id: @session_id, run_id: task_id.to_s,
+                      source: @source.to_s, input_created_at: created_at,
+                      observed_at: Time.now.utc.iso8601(6), status: "running" }
 
       # Continuation of a previously-interrupted task (e.g. user sent a
       # supplementary message without stopping the running task) keeps the
@@ -596,13 +594,15 @@ module Clacky
       @input_mutex.synchronize { @accepting_steering = true }
       notify_input_queue
       # The task and user history already exist. A terminal verdict skips the
-      # loop and completion hooks; ensure still cleans up this started turn.
-      hook_result = @hooks.trigger(:on_start, user_input)
+      # loop; ensure still reports completion and cleans up this started turn.
+      hook_result = @hooks.trigger(:on_start, user_input, context: run_context)
       case hook_result[:action]
       when :deny
+        run_context[:reason] = "hook_denied"
         @ui&.show_warning(hook_result[:reason] || "Task denied by hook")
         return result = build_result.merge(queue_paused: true)
       when :handled
+        run_context[:handled] = true
         return result = hook_result[:result]
       end
 
@@ -800,6 +800,7 @@ module Clacky
       notify_input_queue
       result = build_result(awaiting_user_feedback: awaiting_user_feedback)
       result[:queue_paused] = true if awaiting_user_feedback || task_interrupted
+      run_context[:reason] = "tool_denied" if task_interrupted
 
       # Run skill evolution hooks after main loop completes
       # Skip if task was interrupted by user (denied tool) or awaiting user feedback
@@ -832,7 +833,8 @@ module Clacky
           awaiting_user_feedback: awaiting_user_feedback
         )
       end
-      @hooks.trigger(:on_complete, result)
+      completion_sent = true
+      complete_run_hook(result, run_context)
 
       # Standing-goal loop: after a completed turn, ask the judge whether the
       # goal is met. If not (and budget/health allow), auto-run the next turn
@@ -847,6 +849,8 @@ module Clacky
       result[:queue_paused] = true if @goal_manager&.state&.paused?
       result
     rescue Clacky::AgentInterrupted
+      result = { status: :cancelled }
+      run_context[:reason] = (Thread.current[:interrupt_reason] || :user).to_s if run_context
       # A cancelled fan-out captured its subagents' progress but never reached
       # observe() to persist it — anchor those trails now so a page reload
       # after the interrupt still shows what the subagents did.
@@ -859,6 +863,7 @@ module Clacky
       # Let CLI handle the interrupt message
       raise
     rescue StandardError => e
+      run_context[:error_code] = e.error_code if run_context && e.respond_to?(:error_code)
       # Log complete error information to debug_logs for troubleshooting
       @debug_logs << {
         timestamp: Time.now.iso8601,
@@ -878,6 +883,11 @@ module Clacky
       result = build_result(:error, error: e.message)
       raise
     ensure
+      # A recursive goal continuation owns its own completion. Do not let an
+      # unwinding predecessor settle a newer turn or report the same turn twice.
+      if run_context && !completion_sent && task_id == @current_task_id
+        complete_run_hook(result, run_context)
+      end
       if run_turn_started && task_id == @current_task_id
         @input_mutex.synchronize do
           @accepting_steering = false
@@ -893,6 +903,25 @@ module Clacky
       # Guarded by run_turn_started so goal control commands (which return
       # before the task turn) are not counted as agent runs.
       Clacky::Telemetry.task!(result: result) if run_turn_started
+    end
+
+    private def complete_run_hook(result, context)
+      result = { status: :error } unless result.is_a?(Hash)
+      cancelled = context[:reason] || [:cancelled, :interrupted].include?(result[:status])
+      status = if cancelled
+                 "cancelled"
+               elsif result[:status] != :success
+                 "failed"
+               elsif result[:awaiting_user_feedback]
+                 "awaiting_user"
+               else
+                 "completed"
+               end
+      # Denied work can retain its historical return value for queue control,
+      # but completion observers must never interpret it as a successful run.
+      notification = cancelled ? result.merge(status: :cancelled) : result
+      @hooks.trigger(:on_complete, notification,
+                     context: context.merge(status: status, observed_at: Time.now.utc.iso8601(6)))
     end
 
     # Shared by initial input and steering; only the execution thread writes history.

@@ -121,6 +121,16 @@ RSpec.describe "Advisor default extension" do
       expect(Clacky::ThreadRegistry).to have_received(:spawn).once
     end
 
+    it "clears a failed round without scheduling advice" do
+      observe_tool("write", "failed-round-marker")
+      worker.finish_run(analyze: false)
+      expect(Clacky::ThreadRegistry).not_to have_received(:spawn)
+      expect(worker.instance_variable_get(:@trail)).to be_empty
+      expect(worker.instance_variable_get(:@tools_this_run)).to eq(0)
+      worker.finish_run
+      expect(Clacky::ThreadRegistry).to have_received(:spawn).once
+    end
+
     it "recommends after a round with no tool calls at all (the first 'hi')" do
       events = []
       allow(agent).to receive(:emit_event) { |type, **data| events << [type, data] }

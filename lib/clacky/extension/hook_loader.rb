@@ -21,9 +21,6 @@ module Clacky
           next
         end
 
-        scope = unit.spec.fetch("scope", "default")
-        Clacky::HookManager.new.validate_scope!(event, scope)
-        Clacky::ExtensionHookRegistry.current_scope = scope
         Clacky::ExtensionHookRegistry.current_event = event
         require unit.spec["file_abs"]
         result.registered << [unit.ext_id, unit.id, event]
@@ -34,7 +31,6 @@ module Clacky
         Clacky::Logger.warn("[ExtensionHookLoader] #{unit.ext_id}/#{unit.id}: #{e.message}")
       ensure
         Clacky::ExtensionHookRegistry.current_event = nil
-        Clacky::ExtensionHookRegistry.current_scope = nil
       end
       @last_result = result
       result
@@ -50,23 +46,19 @@ module Clacky
   # HookManager during init via `apply_to`.
   module ExtensionHookRegistry
     @callbacks = Hash.new { |h, k| h[k] = [] }
-    @lifecycle_callbacks = Hash.new { |h, k| h[k] = [] }
     @current_event = nil
 
     class << self
-      attr_accessor :current_event, :current_scope
+      attr_accessor :current_event
 
       # Register a callback. `event` falls back to the loader-set context so
       # ext hook files can call `add { ... }` without repeating the event name
       # already declared in ext.yml.
-      def add(event = nil, scope: nil, &block)
+      def add(event = nil, &block)
         ev = (event || @current_event)
         raise ArgumentError, "ExtensionHookRegistry.add called outside a hook file" unless ev
 
-        selected_scope = scope || @current_scope || :default
-        Clacky::HookManager.new.validate_scope!(ev.to_sym, selected_scope)
-        callbacks = selected_scope.to_s == "lifecycle" ? @lifecycle_callbacks : @callbacks
-        callbacks[ev.to_sym] << block
+        @callbacks[ev.to_sym] << block
       end
 
       def callbacks
@@ -77,15 +69,10 @@ module Clacky
         @callbacks.each do |event, blocks|
           blocks.each { |b| hook_manager.add(event, &b) }
         end
-        @lifecycle_callbacks.each do |event, blocks|
-          blocks.each { |b| hook_manager.add(event, scope: :lifecycle, &b) }
-        end
       end
 
       def clear!
         @callbacks.clear
-        @lifecycle_callbacks.clear
-        @current_scope = nil
       end
     end
   end
