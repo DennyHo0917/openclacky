@@ -9,6 +9,8 @@ module Clacky
       :on_start,
       :on_complete,
       :on_iteration,
+      :on_user_input,
+      :on_session_state,
       :session_rollback
     ].freeze
 
@@ -40,6 +42,7 @@ module Clacky
       @hooks[event].each do |hook|
         begin
           hook_result = hook.call(*args, @agent)
+          next if [:on_user_input, :on_session_state].include?(event)
           next unless hook_result.is_a?(Hash)
           # First deny wins and stops the chain: a weaker later verdict must
           # never clobber a stronger earlier one, and the first deny's reason
