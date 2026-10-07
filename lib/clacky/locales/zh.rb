@@ -6,7 +6,7 @@ module Clacky
       "phase.skill_evolution"           => "正在复盘本次任务",
       "phase.memory_update"             => "正在更新长期记忆",
       "llm.error.insufficient_credit"   => "API Key 账户余额不足，请前往控制台充值后继续使用",
-      "llm.error.rate_limit_400"        => "请求频率过高或服务暂时不可用，正在重试...",
+      "llm.error.rate_limit_400"        => "请求频率过高或模型暂时不可用，请暂时切换其他模型重试",
       "llm.error.invalid_api_key"       => "API Key 无效或已过期，请到设置中重新配置",
       "llm.error.403.model_not_allowed" => "免费试用仅支持 or-gemini-3-8-flash 模型，请切换到该模型，或充值后使用其他模型",
       "llm.error.403.api_key_revoked"   => "API 密钥已被撤销，请前往控制台重新生成",

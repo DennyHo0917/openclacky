@@ -6,7 +6,7 @@ module Clacky
       "phase.skill_evolution"           => "Reflecting on this task",
       "phase.memory_update"             => "Updating long-term memory",
       "llm.error.insufficient_credit"   => "Insufficient credit, please top up your account to continue",
-      "llm.error.rate_limit_400"        => "Rate limit or service issue, retrying...",
+      "llm.error.rate_limit_400"        => "Too many requests or model temporarily unavailable. Please switch to another model and retry",
       "llm.error.invalid_api_key"       => "API key is invalid or expired, please update it in Settings",
       "llm.error.403.model_not_allowed" => "Free trial only supports the or-gemini-3-8-flash model. Switch to that model, or top up to use other models",
       "llm.error.403.api_key_revoked"   => "API key has been revoked, please generate a new one",
