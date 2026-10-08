@@ -5605,6 +5605,12 @@ body {
   margin: -3px 2px -3px 0;
   padding: 3px;
 }
+/* Custom-endpoint models expose no sibling variants, so the caret would only
+   promise an empty quick-switch panel. Hidden here; clicking the name still
+   opens the full catalog. */
+#sib-model.sib-model-no-subs .sib-caret {
+  display: none;
+}
 /* The dir/reasoning carets are hints only: clicking them must reach the row,
    and the row hover already provides the feedback. */
 #sib-dir .sib-caret,
