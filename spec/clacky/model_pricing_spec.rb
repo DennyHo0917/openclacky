@@ -549,6 +549,40 @@ RSpec.describe Clacky::ModelPricing do
       end
     end
     
+    context "with GPT-6.1 Sol (Bedrock Global CRIS)" do
+      it "resolves the gateway alias and the Bedrock usage key to one rate" do
+        expect(described_class.normalize_model_name("abs-gpt-6.1-sol")).to eq("gpt-6.1-sol")
+        expect(described_class.normalize_model_name("global.openai.gpt-6.1-sol")).to eq("gpt-6.1-sol")
+      end
+
+      it "bills the short-context tier with cache read" do
+        usage = {
+          prompt_tokens: 150_000,
+          completion_tokens: 100_000,
+          cache_read_input_tokens: 50_000
+        }
+
+        # Regular input: (150_000 - 50_000)/1M * $2.00 = $0.20
+        # Cache read:      50_000 /1M * $0.10         = $0.005
+        # Output:         100_000 /1M * $10.00        = $1.00
+        # Total: $1.205
+        result = described_class.calculate_cost(model: "abs-gpt-6.1-sol", usage: usage)
+        expect(result[:cost]).to be_within(0.0001).of(1.205)
+        expect(result[:source]).to eq(:price)
+      end
+
+      it "bills the long-context tier once input passes the threshold" do
+        usage = { prompt_tokens: 300_000, completion_tokens: 100_000 }
+
+        # Input:  300_000/1M * $4.00  = $1.20
+        # Output: 100_000/1M * $15.00 = $1.50
+        # Total: $2.70
+        result = described_class.calculate_cost(model: "global.openai.gpt-6.1-sol", usage: usage)
+        expect(result[:cost]).to be_within(0.0001).of(2.70)
+        expect(result[:source]).to eq(:price)
+      end
+    end
+
     context "with GPT-5.6 models (Sol / Terra / Luna)" do
       it "bills gpt-5.6-luna at tiered rates (long tier above 200K)" do
         usage = { prompt_tokens: 1_000_000, completion_tokens: 1_000_000 }

@@ -37,11 +37,17 @@ module Clacky
         "models" => [
           "auto",
           "abs-gpt-6-astra",
+          "abs-gpt-6.1-sol",
           "abs-gpt-6-sol",
           "abs-gpt-6-luna",
           "abs-gpt-5.6-sol",
           "abs-gpt-5.6-terra",
           "abs-gpt-5.6-luna",
+          "dsk-deepseek-flash",
+          "dsk-deepseek-v4-pro",
+          "or-gemini-3-1-pro",
+          "or-gemini-3-8-flash",
+          "or-gemini-3-7-flash",
           "abs-claude-fable-5-1",
           "abs-claude-fable-5",
           "abs-claude-opus-5-5",
@@ -50,12 +56,7 @@ module Clacky
           "abs-claude-opus-4-7",
           "abs-claude-sonnet-5",
           "abs-claude-sonnet-4-6",
-          "abs-claude-haiku-4-5",
-          "dsk-deepseek-flash",
-          "dsk-deepseek-v4-pro",
-          "or-gemini-3-1-pro",
-          "or-gemini-3-8-flash",
-          "or-gemini-3-7-flash"
+          "abs-claude-haiku-4-5"
         ],
         # Image generation models served by the openclacky platform
         # gateway. The gateway exposes a standard OpenAI-compatible
