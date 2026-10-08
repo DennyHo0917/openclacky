@@ -129,7 +129,7 @@ function boot() {
   Projects.setAll([{ id: "p-a", name: "A" }, { id: "p-b", name: "B" }]);
   Projects.renderSection();
 
-  const headerOf = id => projectList.children.find(el => el.dataset.projectId === id);
+  const headerOf = id => projectList.descendants().find(el => el.dataset.projectId === id);
   const actionsIconOf = id => {
     const btn = headerOf(id).children.find(el => el.className === "project-actions-btn");
     return btn.children[0] || btn.appendChild(new Element("svg"));
