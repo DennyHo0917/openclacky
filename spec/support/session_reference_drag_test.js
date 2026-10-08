@@ -155,7 +155,7 @@ assert.equal(Composer.beginReferenceDrag(dt, {
   name: "Investigate timeout",
   sessionId: "session-123",
 }), true);
-assert.equal(dt.effectAllowed, "copy");
+assert.equal(dt.effectAllowed, "copyMove");
 assert.equal(dt.value("text/plain"), "@Investigate timeout");
 assert.deepEqual(
   JSON.parse(JSON.stringify(Composer.readDraggedChip(dt))),
@@ -183,6 +183,12 @@ assert.equal(Composer.readDraggedChip(transfer({
 assert.equal(Composer.readDraggedChip(transfer({
   "application/x-openclacky-reference": JSON.stringify({ type: "session", name: "Missing id" }),
 })), null);
+assert.equal(Composer.acceptsSessionDrag(dt), true, "session drags are identified separately");
+assert.equal(
+  Composer.acceptsSessionDrag(transfer({}, [{ name: "report.pdf" }])),
+  false,
+  "file drags are not mistaken for session drags"
+);
 
 const input = new Element("div");
 assert.equal(Composer.insertDroppedChip(input, dt, 10, 10), true);

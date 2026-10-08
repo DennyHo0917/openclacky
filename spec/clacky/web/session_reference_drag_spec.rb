@@ -5,7 +5,9 @@ require "open3"
 RSpec.describe "Web session reference drag and drop" do
   let(:web_dir) { File.expand_path("../../../lib/clacky/web", __dir__) }
   let(:sessions) { File.read(File.join(web_dir, "sessions.js")) }
+  let(:projects) { File.read(File.join(web_dir, "projects.js")) }
   let(:new_session) { File.read(File.join(web_dir, "features/new-session/view.js")) }
+  let(:i18n) { File.read(File.join(web_dir, "i18n.js")) }
   let(:styles) { File.read(File.join(web_dir, "app.css")) }
 
   it "round-trips and validates the shared Composer drag payload" do
@@ -32,5 +34,27 @@ RSpec.describe "Web session reference drag and drop" do
     expect(styles).to include('.session-item[draggable="true"]')
     expect(styles).to include("#chat-panel.drag-over")
     expect(styles).to include("#welcome.drag-over")
+  end
+
+  it "uses the same session drag as a copy in composers and a move in the sidebar" do
+    expect(projects).to include('event.dataTransfer.dropEffect = "move"')
+    expect(projects).to include('await moveSession(dragged.id, target.projectId)')
+    expect(projects).to include('target.projectId === _draggedSession.projectId')
+    expect(projects).to include('node.closest("#chat-section")')
+    expect(projects).to include('node.closest("[data-project-drop-id]")')
+    expect(projects).to include('Composer.acceptsSessionDrag(event.dataTransfer)')
+    expect(projects).to include('chip.sessionId !== dragged.id')
+    expect(projects).to include('group.className = "project-group"')
+    expect(projects).to include('group.dataset.projectDropId = project.id')
+    expect(projects).not_to include('header.dataset.projectDropId = project.id')
+    expect(projects).not_to include('sessionGroup.dataset.projectDropId = project.id')
+    expect(sessions).to include('el.dataset.projectId = s.project_id')
+  end
+
+  it "clears drag feedback and reports a failed move" do
+    expect(projects).to include('document.addEventListener("dragend"')
+    expect(projects).to include('_clearDropTarget()')
+    expect(styles).to include(".session-move-drop-target")
+    expect(i18n).to include('"sessions.moveToProject.failed"')
   end
 end

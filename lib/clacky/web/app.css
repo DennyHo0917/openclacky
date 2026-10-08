@@ -16361,6 +16361,18 @@ body.setup-mode {
   text-overflow: ellipsis;
 }
 
+/* A session drag is copied when dropped into a composer, but moved when the
+   pointer is over one of these sidebar organization targets. Keep this after
+   the normal hover rules so the move affordance remains visible. */
+#chat-section.session-move-drop-target,
+.project-group.session-move-drop-target,
+.project-session-tag.session-move-drop-target,
+.session-item.session-move-drop-target {
+  background: color-mix(in srgb, var(--session-move-color) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--session-move-color) 45%, transparent);
+  border-radius: var(--radius-sm);
+}
+
 /* ── Project icon badge (sidebar header) ─────────────────────────────────── */
 .project-icon-badge {
   display: inline-flex;
