@@ -713,6 +713,31 @@ module Clacky
         "website_url" => "https://www.orcarouter.ai"
       }.freeze,
 
+      "api-route" => {
+        "name" => "API Route",
+        "base_url" => "https://global.api-route.com/v1",
+        "api" => "openai-completions",
+        "default_model" => "gpt-6.1-sol",
+        # Bare IDs from the key-scoped /v1/models catalog. Users may enter
+        # any other chat model available to their key manually.
+        "models" => [
+          "gpt-6.1-sol",
+          "gpt-6-luna",
+          "claude-fable-5-1",
+          "claude-sonnet-4-6",
+          "claude-haiku-4-5",
+          "gemini-3.5-flash",
+          "gemini-3.1-pro-preview"
+        ],
+        "lite_models" => {
+          "gpt-6.1-sol" => "gpt-6-luna",
+          "claude-fable-5-1" => "claude-haiku-4-5",
+          "claude-sonnet-4-6" => "claude-haiku-4-5",
+          "gemini-3.1-pro-preview" => "gemini-3.5-flash"
+        },
+        "website_url" => "https://www.api-route.com/api-keys"
+      }.freeze,
+
       "requesty" => {
         "name" => "Requesty",
         "base_url" => "https://router.requesty.ai/v1",
@@ -783,6 +808,7 @@ module Clacky
     OLLAMA_ID         = "ollama"
     ORCAROUTER_ID     = "orcarouter"
     REQUESTY_ID       = "requesty"
+    API_ROUTE_ID      = "api-route"
 
     MEDIA_KINDS = %w[image video audio stt video_understanding].freeze
 

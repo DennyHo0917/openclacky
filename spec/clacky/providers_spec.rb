@@ -277,6 +277,41 @@ RSpec.describe Clacky::Providers do
       end
     end
 
+    context "for API Route provider" do
+      it "resolves the canonical endpoint and default chat model" do
+        expect(described_class.default_model("api-route")).to eq("gpt-6.1-sol")
+        expect(described_class.base_url("api-route")).to eq("https://global.api-route.com/v1")
+        expect(described_class.api_type("api-route")).to eq("openai-completions")
+      end
+
+      it "keeps bare model IDs across families on Chat Completions" do
+        models = described_class.models("api-route")
+        expect(models).to include("gpt-6.1-sol", "claude-fable-5-1", "gemini-3.5-flash")
+        models.each do |model|
+          expect(model).not_to include("/")
+          expect(described_class.api_type_for_model("api-route", model)).to eq("openai-completions")
+        end
+        expect(described_class.resolve_api_model(
+          base_url: described_class.base_url("api-route"), model: "custom-chat-id"
+        )).to eq("custom-chat-id")
+      end
+
+      it "pairs primary models with lite models without pairing lite models again" do
+        expect(described_class.lite_model("api-route", "gpt-6.1-sol")).to eq("gpt-6-luna")
+        expect(described_class.lite_model("api-route", "claude-fable-5-1")).to eq("claude-haiku-4-5")
+        expect(described_class.lite_model("api-route", "gemini-3.1-pro-preview")).to eq("gemini-3.5-flash")
+        expect(described_class.lite_model("api-route", "claude-haiku-4-5")).to be_nil
+        expect(described_class.lite_model("api-route", "gpt-6-luna")).to be_nil
+      end
+
+      it "recognizes the canonical endpoint and its request paths" do
+        expect(described_class.find_by_base_url("https://global.api-route.com/v1/")).to eq("api-route")
+        expect(described_class.find_by_base_url("https://global.api-route.com/v1/chat/completions")).to eq("api-route")
+        expect(described_class.find_by_base_url("https://global.api-route.com.evil.example/v1")).to be_nil
+        expect(described_class::PRESETS["api-route"]["website_url"]).to eq("https://www.api-route.com/api-keys")
+      end
+    end
+
     context "for Requesty provider" do
       it "resolves default model to claude-sonnet-4-6" do
         expect(described_class.default_model("requesty")).to eq("claude-sonnet-4-6")

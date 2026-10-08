@@ -205,7 +205,7 @@ $ openclacky
 
 Set your **API Key**, **Model**, and **Base URL** (any OpenAI-compatible provider).
 
-Supported out of the box: **Claude (Anthropic) · GPT (OpenAI) · DeepSeek · Kimi (Moonshot) · MiniMax · OpenRouter · OrcaRouter · Requesty** — or any custom endpoint.
+Supported out of the box: **Claude (Anthropic) · GPT (OpenAI) · DeepSeek · Kimi (Moonshot) · MiniMax · OpenRouter · OrcaRouter · Requesty · [API Route](https://www.api-route.com/)** — or any custom endpoint.
 
 ## Coding use case
 
