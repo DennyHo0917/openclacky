@@ -88,15 +88,18 @@ module Clacky
           body[:toolConfig] = { tools: tools.map { |t| to_api_tool(t) } }
         end
 
-        extra = additional_fields_for_effort(reasoning_effort)
+        extra = additional_fields_for_effort(reasoning_effort, model)
         body[:additionalModelRequestFields] = extra if extra
 
         body
       end
 
-      private_class_method def self.additional_fields_for_effort(effort)
+      private_class_method def self.additional_fields_for_effort(effort, model = nil)
         return nil if effort.nil? || effort.to_s.empty?
         return nil unless %w[low medium high xhigh max].include?(effort.to_s)
+        # Converse accepts thinking/output_config only for the Anthropic family;
+        # other Converse models (Z.AI GLM, DeepSeek) reject unknown fields.
+        return nil unless model.to_s.downcase.include?("claude")
         {
           thinking: { type: "adaptive" },
           output_config: { effort: effort.to_s }

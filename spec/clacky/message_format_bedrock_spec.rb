@@ -30,4 +30,28 @@ RSpec.describe Clacky::MessageFormat::Bedrock do
       expect(use_block[:toolUse][:toolUseId]).to match(/\A[a-zA-Z0-9_-]+\z/)
     end
   end
+
+  describe "reasoning effort injection" do
+    let(:messages)   { [{ role: "user", content: "hi" }] }
+    let(:tools)      { [] }
+    let(:max_tokens) { 1024 }
+
+    it "sends thinking/output_config for Claude models" do
+      body = described_class.build_request_body(
+        messages, "abs-claude-sonnet-5", tools, max_tokens, false, reasoning_effort: "high"
+      )
+
+      expect(body[:additionalModelRequestFields]).to eq(
+        { thinking: { type: "adaptive" }, output_config: { effort: "high" } }
+      )
+    end
+
+    it "omits them for non-Anthropic Converse models such as Z.AI GLM 5.3" do
+      body = described_class.build_request_body(
+        messages, "abs-glm-5.3", tools, max_tokens, false, reasoning_effort: "high"
+      )
+
+      expect(body).not_to have_key(:additionalModelRequestFields)
+    end
+  end
 end
